@@ -1,6 +1,20 @@
-# Nexus v0.1.2 — corrected build
+# Nexus v0.2.0 — Brain foundation
 
-This package contains the corrected source and pytest simulation suite.
+Nexus v0.2.0 keeps the v0.1.2 safety/tool foundation and adds a cognitive orchestration layer.
+
+## Brain loop
+
+Understand → Remember → Reason → Decide → Act → Verify → Diagnose → Adapt → Learn → Respond
+
+The brain is split into small components:
+
+- `src/brain/understanding.py` — turns the owner's request into a structured goal and constraints.
+- `src/brain/state.py` — maintains the current cognitive state and evidence.
+- `src/brain/memory.py` — reads/writes Nexus memory through the existing memory tool.
+- `src/brain/decision.py` — selects the next registered tool action and validates it before execution.
+- `src/brain/brain.py` — orchestrates the cognitive loop and recovery behavior.
+
+The existing planner, permissions, tools, verification, and learning systems remain underneath the brain. The model is a reasoning component, not the whole application.
 
 ## Setup
 
