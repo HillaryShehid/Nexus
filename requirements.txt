@@ -1,5 +1,6 @@
+# Local development/test dependencies only.
+# Cloudflare Workers uses pyproject.toml and the Python Workers runtime.
 openai
 python-dotenv
-duckduck-search
 pytest
 pytest-mock
