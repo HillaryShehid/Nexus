@@ -31,12 +31,6 @@ _MANIFEST = {
     },
     "memory_store": {
         "required_args": ["action", "key"],
-        "types": {"action": str, "path": str, "content": str},
-        "limits": {"action": ["read", "write"], "path": 40, "content": 3000},
-        "policy": "ELEVATION_REQUIRED",
-    },
-    "memory_store": {
-        "required_args": ["action", "key"],
         "types": {"action": str, "key": str, "value": str},
         "limits": {"action": ["read", "save"], "key": 40, "value": 1500},
         "policy": "LOW_RISK",
