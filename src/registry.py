@@ -5,12 +5,48 @@ MAX_PLAN_STEPS = 5
 WORKSPACE_DIR = os.path.abspath("nexus_workspace")
 
 _MANIFEST = {
-    "web_search": {"required_args": ["query"], "types": {"query": str}, "limits": {"query": 80}, "policy": "READ"},
-    "read_page": {"required_args": ["url"], "types": {"url": str}, "limits": {"url": 200}, "policy": "READ"},
-    "calculator": {"required_args": ["expression"], "types": {"expression": str}, "limits": {"expression": 100}, "policy": "LOW_RISK"},
-    "file_system": {"required_args": ["action", "path"], "types": {"action": str, "path": str, "content": str}, "limits": {"action": ["read", "write"], "path": 40, "content": 3000}, "policy": "ELEVATION_REQUIRED"},
-    "memory_store": {"required_args": ["action", "key"], "types": {"action": str, "key": str, "value": str}, "limits": {"action": ["read", "save"], "key": 40, "value": 1500}, "policy": "LOW_RISK"},
-    "code_tester": {"required_args": ["python_code"], "types": {"python_code": str}, "limits": {"python_code": 3000}, "policy": "UNTRUSTED_RUNNER"},
+    "web_search": {
+        "required_args": ["query"],
+        "types": {"query": str},
+        "limits": {"query": 80},
+        "policy": "READ",
+    },
+    "read_page": {
+        "required_args": ["url"],
+        "types": {"url": str},
+        "limits": {"url": 200},
+        "policy": "READ",
+    },
+    "calculator": {
+        "required_args": ["expression"],
+        "types": {"expression": str},
+        "limits": {"expression": 100},
+        "policy": "LOW_RISK",
+    },
+    "file_system": {
+        "required_args": ["action", "path"],
+        "types": {"action": str, "path": str, "content": str},
+        "limits": {"action": ["read", "write"], "path": 40, "content": 3000},
+        "policy": "ELEVATION_REQUIRED",
+    },
+    "memory_store": {
+        "required_args": ["action", "key"],
+        "types": {"action": str, "path": str, "content": str},
+        "limits": {"action": ["read", "write"], "path": 40, "content": 3000},
+        "policy": "ELEVATION_REQUIRED",
+    },
+    "memory_store": {
+        "required_args": ["action", "key"],
+        "types": {"action": str, "key": str, "value": str},
+        "limits": {"action": ["read", "save"], "key": 40, "value": 1500},
+        "policy": "LOW_RISK",
+    },
+    "code_tester": {
+        "required_args": ["python_code"],
+        "types": {"python_code": str},
+        "limits": {"python_code": 3000},
+        "policy": "UNTRUSTED_RUNNER",
+    },
 }
 
 
