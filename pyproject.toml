@@ -3,12 +3,10 @@ name = "nexus-brain"
 version = "0.1.3"
 description = "Nexus personal AI brain on Cloudflare Workers"
 requires-python = ">=3.13"
-dependencies = [
-  "openai",
-  "workers-runtime-sdk"
-]
+dependencies = []
 
 [dependency-groups]
 dev = [
-  "workers-py"
+  "workers-py",
+  "workers-runtime-sdk",
 ]
