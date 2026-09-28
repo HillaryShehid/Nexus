@@ -3,7 +3,7 @@
   "name": "nexus3",
   "main": "src/cloudflare_worker.py",
   "compatibility_date": "2026-09-28",
-  "compatibility_flags": ["python_workers"],
+  "compatibility_flags": ["python_workers", "disable_python_external_sdk"],
   "workers_dev": true,
   "vars": {
     "NEXUS_MODEL": "gpt-5.6-luna"
