@@ -1,5 +1,3 @@
-"""Nexus v0.2.0 cognitive architecture."""
-
+"""Nexus cognitive architecture."""
 from src.brain.brain import NexusBrain
-
-__all__ = ["NexusBrain"]
+__all__=["NexusBrain"]
