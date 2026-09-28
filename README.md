@@ -1,26 +1,27 @@
-# Nexus v0.4 — Rebuild 2
+# Nexus v0.1.2 — corrected build
 
-Nexus is a personal-first AI companion platform.
+This package contains the corrected source and pytest simulation suite.
 
-This rebuild starts with the **Nexus Intelligence Core**, not the website.
+## Setup
 
-## Goals
+```bash
+python -m pip install -r requirements.txt
+```
 
-- Provider-neutral intelligence layer
-- Long-term memory and lessons
-- Deterministic reasoning foundation
-- Tool registry with permission gates
-- Self-diagnosis and verification hooks
-- Offline-first local state
-- Research and model adapters added incrementally
-- Safe, testable self-improvement workflows
+Copy `.env.example` to `.env` and set the two environment variables.
 
-## Engineering rule
+Run Nexus:
 
-**Edit → inspect → fix → test → verify.**
+```bash
+python run.py
+```
 
-Nexus should never claim an action happened unless the system has evidence that it happened.
+Run tests:
 
-## Current status
+```bash
+pytest -q
+```
 
-v0.4.1 foundation: architecture and testable core.
+## Important security note
+
+`code_tester` is an **untrusted process runner**, not a perfect operating-system sandbox. It has a timeout, isolated working directory, isolated environment, and no shell invocation, but full OS-level isolation requires a dedicated sandbox/container/VM layer.
