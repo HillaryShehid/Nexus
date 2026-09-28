@@ -1,0 +1,6 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+nexus_memory.json
+nexus_lessons.json
