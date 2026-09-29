@@ -7,6 +7,7 @@ from src.brain.adaptation import AdaptationEngine
 from src.brain.executive import ExecutiveController
 from src.brain.goals import GoalManager
 from src.brain.memory import CognitiveMemory
+from src.brain.self_improvement import SelfImprovementEngine
 from src.brain.router import ReasoningRouter
 from src.brain.state import CognitiveState
 from src.brain.world_model import WorldModel
@@ -43,7 +44,25 @@ class NexusBrain:
         self.executive = ExecutiveController(model)
         self.goals = GoalManager(model)
         self.adaptation = AdaptationEngine(model, learning)
+        self.self_improvement = SelfImprovementEngine(model)
 
+
+    def improve(self, objective: str, relative_paths: list[str] | None = None) -> dict[str, Any]:
+        """Run a controlled self-improvement cycle and stage the result.
+
+        This is intentionally separate from normal tool execution. Nexus can
+        research/propose/test a candidate, but it cannot promote that candidate
+        into the live source tree through this method.
+        """
+        result = self.self_improvement.run_cycle(objective, relative_paths)
+        return {
+            "success": result.success,
+            "status": result.status,
+            "message": result.message,
+            "candidate_path": result.candidate_path,
+            "changed_files": list(result.changed_files),
+            "promotion": "owner_approval_required",
+        }
     def run(self, request: str, max_actions: int | None = None) -> str:
         """Run Nexus and return only the final natural-language response."""
         result = self.run_detailed(request, max_actions=max_actions)
