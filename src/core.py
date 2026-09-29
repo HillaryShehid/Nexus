@@ -21,6 +21,10 @@ class NexusCore:
         self.tasks=TaskManager()
         self.brain=NexusBrain(model=self.brain_model,tools=self.tools,planner=self.planner,
                               verifier=self.verifier,permissions=self.permissions,learning=self.learning)
+    def improve_nexus(self, objective, relative_paths=None):
+        """Create and validate a self-improvement candidate; never promote it."""
+        return self.brain.improve(objective, relative_paths)
+
     def handle_request(self,user_input):
         if not isinstance(user_input,str): return "I need the request as text."
         if len(user_input)>MAX_USER_INPUT: return "System limitation: the prompt is longer than the 1000-character limit."
