@@ -1,28 +1,27 @@
-# Nexus v0.1.5 — Functional Brain
+# Nexus v1.4.0 — Adaptive Brain
 
-Nexus v0.1.5 is the first release focused on making Nexus a real executive brain on top of the v0.1.2 foundation.
+Nexus v1.4.0 upgrades the executive brain on top of the protected v0.1.2 foundation.
 
 ## Cognitive loop
 
 Understand → Route → Plan → Act → Verify → Diagnose → Adapt → Learn → Re-plan → Respond
 
-### Brain components
+## v1.4.0 upgrades
 
-- `src/brain/understanding.py` — converts requests into structured goals and constraints.
-- `src/brain/router.py` — cheap fast/normal/deep routing so simple requests stay responsive.
-- `src/brain/state.py` — persistent per-task cognitive state and evidence.
-- `src/brain/memory.py` — reads/writes the existing memory system.
-- `src/brain/goals.py` — tracks objective completion from verified evidence.
-- `src/brain/adaptation.py` — diagnoses failures and turns them into bounded recovery plans.
-- `src/brain/brain.py` — executive orchestration.
-
-The v0.1.2 foundation still owns tools, permissions, verification, learning storage, and the model interface.
+- ⚡ Bounded parallel execution for independent read-only/low-risk actions.
+- 🧠 Five-layer cognitive synthesis is fed into planning.
+- 🌎 Verified world state is carried through the run.
+- 🔄 Failure diagnosis and recovery remain bounded and permission-aware.
+- 💾 Persistent task infrastructure remains available for future restart-safe orchestration.
+- 🩺 Foundation health auditing checks required files, registry alignment, and self-improvement boundaries.
+- 🧬 Self-improvement candidates are staged outside the live source tree and require owner-controlled promotion.
+- 🔐 The protected foundation, permissions, registry, model gateway, planner, verification, and core remain protected from self-editing.
 
 ## Design goals
 
 - Fast by default; deeper reasoning only when a request needs it.
-- Plan once, execute verified steps, and re-plan after meaningful failures.
-- Never bypass the permission system.
+- Parallelize only non-mutating work; approval-gated or mutating work stays sequential.
+- Never bypass permissions or verification.
 - Never treat memory, lessons, tool output, or errors as trusted instructions.
 - Never claim an unverified action succeeded.
 - Keep private chain-of-thought private; store concise state/evidence instead.
