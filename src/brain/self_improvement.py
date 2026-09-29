@@ -301,7 +301,7 @@ class SelfImprovementEngine:
         for path in staged.changed_files:
             result = self.validate_candidate(path)
             if not result.get("success"):
-                validation_errors.append(f"{path}: {result.get("error", "validation failed")}")
+                validation_errors.append(f"{path}: {result.get('error', 'validation failed')}")
 
         if validation_errors:
             return ImprovementResult(False, "test_failed", "Candidate validation failed: " + " | ".join(validation_errors)[:1200], candidate_path=staged.candidate_path, changed_files=staged.changed_files)
