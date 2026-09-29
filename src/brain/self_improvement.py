@@ -33,15 +33,29 @@ class SelfImprovementEngine:
     unrestricted self-modifying program.
     """
 
-    DEFAULT_ALLOWLIST = (
+    # The base is the constitution: execution, permissions, tools, verification,
+    # model access, planner enforcement, and application wiring are immutable to Nexus.
+    PROTECTED_PATHS = frozenset({
         "src/brain/brain.py",
+        "src/planner.py",
+        "src/permissions.py",
+        "src/registry.py",
+        "src/tools.py",
+        "src/verification.py",
+        "src/model.py",
+        "src/core.py",
+        "run.py",
+    })
+
+    # Nexus may improve these higher-level cognition modules. New modules should
+    # be added here deliberately; the model cannot expand this list itself.
+    DEFAULT_ALLOWLIST = (
         "src/brain/router.py",
         "src/brain/goals.py",
         "src/brain/adaptation.py",
         "src/brain/world_model.py",
         "src/brain/state.py",
         "src/brain/memory.py",
-        "src/planner.py",
     )
 
     MAX_SOURCE_BYTES = 120_000
@@ -60,11 +74,13 @@ class SelfImprovementEngine:
         self.workspace = Path(workspace).resolve()
         self.candidate_root = self.workspace / "self_improvements"
         self.candidate_root.mkdir(parents=True, exist_ok=True)
-        self.allowlist = set(allowlist or self.DEFAULT_ALLOWLIST)
+        requested_allowlist = set(allowlist or self.DEFAULT_ALLOWLIST)
+        # Even caller-supplied allowlists cannot unlock the protected base.
+        self.allowlist = requested_allowlist.difference(self.PROTECTED_PATHS)
         self.tester = tester
 
     def _safe_project_path(self, relative_path: str) -> Path | None:
-        if relative_path not in self.allowlist:
+        if relative_path in self.PROTECTED_PATHS or relative_path not in self.allowlist:
             return None
 
         path = (self.project_root / relative_path).resolve()
@@ -180,7 +196,7 @@ class SelfImprovementEngine:
         safe_changes: dict[str, str] = {}
 
         for path, content in changes.items():
-            if path not in self.allowlist:
+            if path in self.PROTECTED_PATHS or path not in self.allowlist:
                 return {
                     "success": False,
                     "error": f"Model attempted to modify an unapproved file: {path}",
@@ -226,7 +242,7 @@ class SelfImprovementEngine:
         staged: list[str] = []
 
         for relative_path, content in changes.items():
-            if relative_path not in self.allowlist:
+            if relative_path in self.PROTECTED_PATHS or relative_path not in self.allowlist:
                 return ImprovementResult(
                     False,
                     "rejected",
