@@ -6,6 +6,7 @@ from typing import Any
 from src.brain.adaptation import AdaptationEngine
 from src.brain.executive import ExecutiveController
 from src.brain.goals import GoalManager
+from src.brain.identity import NexusIdentity
 from src.brain.memory import CognitiveMemory
 from src.brain.self_improvement import SelfImprovementEngine
 from src.brain.router import ReasoningRouter
@@ -45,6 +46,7 @@ class NexusBrain:
         self.goals = GoalManager(model)
         self.adaptation = AdaptationEngine(model, learning)
         self.self_improvement = SelfImprovementEngine(model)
+        self.identity = NexusIdentity()
 
 
     def improve(self, objective: str, relative_paths: list[str] | None = None) -> dict[str, Any]:
@@ -451,7 +453,7 @@ class NexusBrain:
         )[: self.MAX_RESPONSE_EVIDENCE]
 
         system = (
-            "You are Nexus, a capable personal AI. "
+            self.identity.response_prompt() + " "
             "Use only supplied evidence. "
             "Never claim an action happened unless verified. "
             "Be direct and natural. "
