@@ -19,8 +19,7 @@ class NexusCapabilityStack:
     """
 
     profiles = (
-        CapabilityProfile(
-            "Astra",
+        CapabilityProfile(,
             (
                 "adaptive_reasoning",
                 "curiosity",
