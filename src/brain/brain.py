@@ -266,6 +266,7 @@ class NexusBrain:
             "known_facts": state.known_facts,
             "missing_information": state.missing_information,
             "assumptions": state.assumptions,
+            "cognitive_synthesis": brief.get("cognitive_synthesis", {}),
             "world": world.snapshot(),
             "completed_steps": state.completed_steps[-8:],
             "failures": state.failures[-5:],
