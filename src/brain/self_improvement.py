@@ -4,6 +4,9 @@ import ast
 import json
 import os
 import tempfile
+import subprocess
+import sys
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -276,6 +279,61 @@ class SelfImprovementEngine:
             changed_files=tuple(staged),
         )
 
+    def run_cycle(
+        self,
+        objective: str,
+        relative_paths: list[str] | None = None,
+    ) -> ImprovementResult:
+        """Run the v1.3.7 controlled improvement cycle.
+
+        inspect -> propose -> syntax check -> stage -> compile check -> record.
+        The cycle never replaces files under the live project source tree.
+        """
+        proposal = self.propose(objective, relative_paths)
+        if not proposal.get("success"):
+            return ImprovementResult(False, "proposal_failed", str(proposal.get("error", "Improvement proposal failed.")))
+
+        staged = self.stage(proposal["changes"])
+        if not staged.success:
+            return staged
+
+        validation_errors: list[str] = []
+        for path in staged.changed_files:
+            result = self.validate_candidate(path)
+            if not result.get("success"):
+                validation_errors.append(f"{path}: {result.get("error", "validation failed")}")
+
+        if validation_errors:
+            return ImprovementResult(False, "test_failed", "Candidate validation failed: " + " | ".join(validation_errors)[:1200], candidate_path=staged.candidate_path, changed_files=staged.changed_files)
+
+        compile_result = self._compile_staged(staged.changed_files)
+        if not compile_result.get("success"):
+            return ImprovementResult(False, "test_failed", str(compile_result.get("error", "Candidate compile check failed.")), candidate_path=staged.candidate_path, changed_files=staged.changed_files)
+
+        self._write_proposal_record(objective, str(proposal.get("reason", "")), staged.changed_files, "validated_candidate")
+        return ImprovementResult(True, "validated_candidate", "Candidate was proposed, staged, syntax-checked, and compile-checked. Live source files were not modified.", candidate_path=staged.candidate_path, changed_files=staged.changed_files)
+
+    def _compile_staged(self, changed_files: tuple[str, ...]) -> dict[str, Any]:
+        """Bounded compile-only validation; candidate code is never executed."""
+        paths = [str(self.candidate_root / relative_path) for relative_path in changed_files]
+        try:
+            completed = subprocess.run([sys.executable, "-m", "py_compile", *paths], cwd=str(self.candidate_root), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5, check=False)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return {"success": False, "error": f"Bounded compile check failed: {exc}"}
+        if completed.returncode != 0:
+            return {"success": False, "error": "Candidate compile check failed: " + completed.stderr[:800]}
+        return {"success": True}
+
+    def _write_proposal_record(self, objective: str, reason: str, changed_files: tuple[str, ...], status: str) -> None:
+        record = {"created_at": datetime.now(timezone.utc).isoformat(), "objective": str(objective)[:3000], "reason": str(reason)[:1000], "changed_files": list(changed_files), "status": status, "promotion": "owner_approval_required"}
+        destination = self.candidate_root / "latest_proposal.json"
+        temporary = destination.with_suffix(".tmp")
+        try:
+            temporary.write_text(json.dumps(record, indent=2, ensure_ascii=False), encoding="utf-8")
+            os.replace(temporary, destination)
+        except OSError:
+            try: temporary.unlink(missing_ok=True)
+            except OSError: pass
     def validate_candidate(self, relative_path: str) -> dict[str, Any]:
         """
         Parse a staged candidate. If a tester callback is supplied, it may
