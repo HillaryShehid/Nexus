@@ -6,6 +6,7 @@ from typing import Any
 from src.brain.adaptation import AdaptationEngine
 from src.brain.capabilities import NexusCapabilityStack
 from src.brain.executive import ExecutiveController
+from src.brain.executor import ParallelActionExecutor
 from src.brain.goals import GoalManager
 from src.brain.identity import NexusIdentity
 from src.brain.memory import CognitiveMemory
@@ -44,6 +45,7 @@ class NexusBrain:
         self.memory = CognitiveMemory(tools)
         self.router = ReasoningRouter()
         self.executive = ExecutiveController(model)
+        self.parallel_executor = ParallelActionExecutor()
         self.goals = GoalManager(model)
         self.adaptation = AdaptationEngine(model, learning)
         self.self_improvement = SelfImprovementEngine(model)
@@ -136,11 +138,88 @@ class NexusBrain:
             and len(state.completed_steps) < action_limit
             and len(state.failures) < self.MAX_FAILURES
         ):
+            # Batch only consecutive read-only/low-risk actions. Mutating or
+            # approval-gated tools remain strictly sequential.
+            batch = []
+            cursor = index
+            while (
+                cursor < len(plan)
+                and len(batch) < self.parallel_executor.MAX_WORKERS
+                and len(state.completed_steps) + len(batch) < action_limit
+                and self.parallel_executor.can_parallelize(plan[cursor])
+            ):
+                candidate = plan[cursor]
+                candidate_signature = self._task_signature(candidate)
+                if candidate_signature in executed_signatures:
+                    break
+                batch.append(candidate)
+                cursor += 1
+
+            if len(batch) > 1:
+                for task_offset, result in self.parallel_executor.run(
+                    batch, self._execute_verified
+                ):
+                    task = batch[task_offset]
+                    executed_signatures.add(self._task_signature(task))
+                    state.next_action = task
+
+                    if result["verified"]:
+                        world.add_verified_step(task, result["result"])
+                        state.world = world.snapshot()
+                        state.completed_steps.append({
+                            "step": task.get("step"),
+                            "tool": task.get("tool"),
+                            "description": task.get("description", ""),
+                            "detail": str(result["result"].get("result", ""))[:1200],
+                        })
+                        state.status = "progress"
+                        continue
+
+                    error = str(result.get("error") or "Verification failed.")[:600]
+                    state.failures.append({
+                        "step": task.get("step"),
+                        "tool": task.get("tool"),
+                        "error": error,
+                    })
+
+                if state.failures:
+                    task = batch[min(len(batch) - 1, len(state.failures) - 1)]
+                    error = state.failures[-1]["error"]
+                    cause = self.adaptation.diagnose(
+                        state, task, error, profile=route.profile
+                    )
+                    self.adaptation.learn_from_failure(task, error, cause)
+                    state.status = "recovering"
+                    replans += 1
+                    if replans > self.MAX_REPLANS:
+                        break
+                    lessons = self.learning.retrieve_lessons()
+                    plan = self.planner.construct_plan(
+                        self._recovery_context(
+                            state, brief, world, error, cause, lessons
+                        ),
+                        lessons,
+                        profile=route.profile,
+                    )
+                    if not plan:
+                        break
+                    state.plan = plan
+                    state.status = "acting"
+                    index = 0
+                    continue
+
+                if self.goals.is_complete(
+                    state, brief.get("success_criteria", []), route.profile
+                ):
+                    state.status = "complete"
+                    break
+
+                index += len(batch)
+                continue
+
             task = plan[index]
             signature = self._task_signature(task)
 
-            # Prevent the planner from accidentally issuing the exact same
-            # action repeatedly in one run.
             if signature in executed_signatures:
                 state.failures.append({
                     "step": task.get("step"),
@@ -152,7 +231,6 @@ class NexusBrain:
 
             executed_signatures.add(signature)
             state.next_action = task
-
             result = self._execute_verified(task)
 
             if result["verified"]:
@@ -166,8 +244,6 @@ class NexusBrain:
                 })
                 state.status = "progress"
 
-                # Check the actual goal after every successful action rather
-                # than waiting until the entire plan has been consumed.
                 if self.goals.is_complete(
                     state,
                     brief.get("success_criteria", []),
@@ -179,10 +255,7 @@ class NexusBrain:
                 index += 1
                 continue
 
-            error = str(
-                result.get("error") or "Verification failed."
-            )[:600]
-
+            error = str(result.get("error") or "Verification failed.")[:600]
             state.failures.append({
                 "step": task.get("step"),
                 "tool": task.get("tool"),
@@ -190,13 +263,9 @@ class NexusBrain:
             })
 
             cause = self.adaptation.diagnose(
-                state,
-                task,
-                error,
-                profile=route.profile,
+                state, task, error, profile=route.profile
             )
             self.adaptation.learn_from_failure(task, error, cause)
-
             state.status = "recovering"
             replans += 1
 
@@ -204,22 +273,13 @@ class NexusBrain:
                 break
 
             lessons = self.learning.retrieve_lessons()
-
-            recovery_context = self._recovery_context(
-                state,
-                brief,
-                world,
-                error,
-                cause,
-                lessons,
-            )
-
             plan = self.planner.construct_plan(
-                recovery_context,
+                self._recovery_context(
+                    state, brief, world, error, cause, lessons
+                ),
                 lessons,
                 profile=route.profile,
             )
-
             if not plan:
                 break
 
