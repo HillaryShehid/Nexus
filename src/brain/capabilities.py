@@ -119,24 +119,25 @@ class NexusCapabilityStack:
         }
 
     def select(self, request: str) -> dict[str, Any]:
-        text = str(request or "").lower()
-        selected = {"FRIDAY"}
+        """Blend all five layers for every task.
 
-        if any(x in text for x in ("research", "investigate", "compare", "sources", "study")):
-            selected.add("Claude Mythos")
-        if any(x in text for x in ("plan", "build", "project", "organize", "schedule")):
-            selected.add("JARVIS")
-        if any(x in text for x in ("why", "figure out", "solve", "learn", "understand")):
-            selected.add("Astra")
-        if any(x in text for x in ("system", "architecture", "debug", "recover", "long term")):
-            selected.add("Ultron")
+        Nexus is one combined intelligence, not a collection of switchable
+        personalities. The request can change emphasis, but no layer is
+        disabled merely because the task is simple.
+        """
+        active_layers = [profile.name for profile in self.profiles]
+        capabilities = [
+            capability
+            for profile in self.profiles
+            for capability in profile.capabilities
+        ]
 
         return {
-            "active_layers": [p.name for p in self.profiles if p.name in selected],
-            "capabilities": [
-                capability
-                for p in self.profiles
-                if p.name in selected
-                for capability in p.capabilities
-            ],
+            "active_layers": active_layers,
+            "capabilities": capabilities,
+            "operating_mode": "fully_blended",
+            "principle": (
+                "Use all five layers together; emphasize whichever capabilities "
+                "fit the task while retaining the others for checking and support."
+            ),
         }
