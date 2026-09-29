@@ -7,6 +7,7 @@ from src.planner import Planner
 from src.tools import ToolSystem
 from src.verification import VerificationSystem
 from src.brain.task_manager import TaskManager
+from src.brain.health import NexusHealth
 
 logger=logging.getLogger("nexus.core")
 MAX_USER_INPUT=1000
@@ -19,8 +20,13 @@ class NexusCore:
         self.verifier=VerificationSystem(self.brain_model,self.tools)
         self.learning=LearningSystem(); self.permissions=PermissionSystem()
         self.tasks=TaskManager()
+        self.health=NexusHealth()
         self.brain=NexusBrain(model=self.brain_model,tools=self.tools,planner=self.planner,
                               verifier=self.verifier,permissions=self.permissions,learning=self.learning)
+    def health_check(self):
+        """Run a fast structural audit of the Nexus foundation."""
+        return self.health.run()
+
     def improve_nexus(self, objective, relative_paths=None):
         """Create and validate a self-improvement candidate; never promote it."""
         return self.brain.improve(objective, relative_paths)
