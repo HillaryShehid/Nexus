@@ -326,8 +326,103 @@ class SelfImprovementEngine:
         if not compile_result.get("success"):
             return ImprovementResult(False, "test_failed", str(compile_result.get("error", "Candidate compile check failed.")), candidate_path=staged.candidate_path, changed_files=staged.changed_files)
 
-        self._write_proposal_record(objective, str(proposal.get("reason", "")), staged.changed_files, "validated_candidate")
-        return ImprovementResult(True, "validated_candidate", "Candidate was proposed, staged, syntax-checked, and compile-checked. Live source files were not modified.", candidate_path=staged.candidate_path, changed_files=staged.changed_files)
+        # Promote only the fixed, allowlisted cognition modules. The protected
+        # base is rejected again at the final write boundary, and originals are
+        # backed up so a partial filesystem failure can be rolled back.
+        promotion = self._promote_candidates(staged.changed_files)
+        if not promotion.get("success"):
+            return ImprovementResult(
+                False,
+                "promotion_failed",
+                str(promotion.get("error", "Candidate promotion failed.")),
+                candidate_path=staged.candidate_path,
+                changed_files=staged.changed_files,
+            )
+
+        self._write_proposal_record(
+            objective,
+            str(proposal.get("reason", "")),
+            staged.changed_files,
+            "promoted_with_backup",
+        )
+        return ImprovementResult(
+            True,
+            "promoted_with_backup",
+            "Candidate passed syntax and compile checks and was applied only to approved cognition modules. "
+            "The protected base was untouched and backups were retained. Full behavioral tests were not run automatically.",
+            candidate_path=staged.candidate_path,
+            changed_files=staged.changed_files,
+        )
+
+    def _promote_candidates(self, changed_files: tuple[str, ...]) -> dict[str, Any]:
+        """Apply only allowlisted cognition files with backups and rollback."""
+        backup_root = self.candidate_root / "backups" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        prepared: list[tuple[Path, Path, Path]] = []
+
+        try:
+            for relative_path in changed_files:
+                if relative_path in self.PROTECTED_PATHS or relative_path not in self.allowlist:
+                    return {"success": False, "error": f"Protected or unapproved path blocked: {relative_path}"}
+
+                live_path = (self.project_root / relative_path).resolve()
+                try:
+                    live_path.relative_to(self.project_root)
+                except ValueError:
+                    return {"success": False, "error": "Live path escaped project root."}
+
+                if not live_path.is_file() or live_path.is_symlink():
+                    return {"success": False, "error": f"Live source file is missing or unsafe: {relative_path}"}
+
+                candidate_path = (self.candidate_root / relative_path).resolve()
+                try:
+                    candidate_path.relative_to(self.candidate_root)
+                except ValueError:
+                    return {"success": False, "error": "Candidate path escaped staging root."}
+
+                candidate_content = candidate_path.read_text(encoding="utf-8")
+                ast.parse(candidate_content, filename=relative_path)
+
+                backup_path = backup_root / relative_path
+                backup_path.parent.mkdir(parents=True, exist_ok=True)
+                backup_path.write_bytes(live_path.read_bytes())
+                prepared.append((live_path, candidate_path, backup_path))
+
+            applied: list[tuple[Path, Path]] = []
+            try:
+                for live_path, candidate_path, backup_path in prepared:
+                    content = candidate_path.read_bytes()
+                    fd, temp_path = tempfile.mkstemp(
+                        dir=str(live_path.parent),
+                        prefix=".nexus_candidate_",
+                        suffix=".tmp",
+                    )
+                    try:
+                        with os.fdopen(fd, "wb") as handle:
+                            handle.write(content)
+                            handle.flush()
+                            os.fsync(handle.fileno())
+                        os.replace(temp_path, live_path)
+                        applied.append((live_path, backup_path))
+                    finally:
+                        if os.path.exists(temp_path):
+                            os.unlink(temp_path)
+            except Exception:
+                for live_path, backup_path in reversed(applied):
+                    fd, temp_path = tempfile.mkstemp(dir=str(live_path.parent), prefix=".nexus_rollback_", suffix=".tmp")
+                    try:
+                        with os.fdopen(fd, "wb") as handle:
+                            handle.write(backup_path.read_bytes())
+                            handle.flush()
+                            os.fsync(handle.fileno())
+                        os.replace(temp_path, live_path)
+                    finally:
+                        if os.path.exists(temp_path):
+                            os.unlink(temp_path)
+                raise
+
+            return {"success": True, "backup_path": str(backup_root)}
+        except (OSError, UnicodeError, SyntaxError) as exc:
+            return {"success": False, "error": f"Safe promotion failed: {str(exc)[:500]}"}
 
     def _compile_staged(self, changed_files: tuple[str, ...]) -> dict[str, Any]:
         """Bounded compile-only validation; candidate code is never executed."""
