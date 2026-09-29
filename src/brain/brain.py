@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from src.brain.adaptation import AdaptationEngine
+from src.brain.capabilities import NexusCapabilityStack
 from src.brain.executive import ExecutiveController
 from src.brain.goals import GoalManager
 from src.brain.identity import NexusIdentity
@@ -47,6 +48,7 @@ class NexusBrain:
         self.adaptation = AdaptationEngine(model, learning)
         self.self_improvement = SelfImprovementEngine(model)
         self.identity = NexusIdentity()
+        self.capabilities = NexusCapabilityStack()
 
 
     def improve(self, objective: str, relative_paths: list[str] | None = None) -> dict[str, Any]:
@@ -88,6 +90,7 @@ class NexusBrain:
             }
 
         route = self.router.route(request)
+        capability_stack = self.capabilities.select(request)
         action_limit = self._action_budget(route.max_actions, max_actions)
 
         memory = self.memory.read_context()
@@ -101,7 +104,9 @@ class NexusBrain:
             constraints=brief["constraints"],
             known_facts=brief["known_facts"],
             missing_information=brief["missing_information"],
-            assumptions=brief["assumptions"],
+            assumptions=brief["assumptions"] + [
+                "Active capability layers: " + ", ".join(capability_stack["active_layers"])
+            ],
             lessons=self._safe_lesson_list(lessons),
             status="planning",
         )
@@ -255,6 +260,7 @@ class NexusBrain:
             "goal": state.goal,
             "intent": state.intent,
             "capability": brief["capability"],
+            "active_layers": capability_stack["active_layers"] if "capability_stack" in locals() else [],
             "priority": brief["priority"],
             "constraints": state.constraints,
             "success_criteria": brief["success_criteria"],
@@ -491,4 +497,5 @@ class NexusBrain:
             "completed_steps": list(state.completed_steps),
             "failures": list(state.failures),
             "action_count": len(state.completed_steps),
+            "capability_layers": self.capabilities.select(state.request),
         }
