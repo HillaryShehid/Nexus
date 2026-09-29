@@ -25,12 +25,13 @@ class SelfImprovementEngine:
     """
     Controlled self-improvement for Nexus.
 
-    Nexus may inspect approved source files, propose edits, write candidates
-    outside the source tree, and validate them. Promotion into the real source
-    tree is deliberately a separate, owner-controlled operation.
+    Nexus may inspect approved source files, propose edits, stage candidates,
+    and validate them. Promotion into the live source tree is deliberately
+    separate and owner-controlled.
 
-    This prevents a prompt, webpage, or model response from becoming an
-    unrestricted self-modifying program.
+    The engine can improve cognition, but it cannot silently change the live
+    program. This prevents a prompt, webpage, or model response from becoming
+    an unrestricted self-modifying program.
     """
 
     # The base is the constitution: execution, permissions, tools, verification,
@@ -300,14 +301,19 @@ class SelfImprovementEngine:
         objective: str,
         relative_paths: list[str] | None = None,
     ) -> ImprovementResult:
-        """Run the v1.3.7 controlled improvement cycle.
+        """Run the controlled improvement cycle.
 
         inspect -> propose -> syntax check -> stage -> compile check -> record.
-        The cycle never replaces files under the live project source tree.
+        The cycle never replaces live source files. A separate owner-controlled
+        promotion mechanism can apply a reviewed candidate later.
         """
         proposal = self.propose(objective, relative_paths)
         if not proposal.get("success"):
-            return ImprovementResult(False, "proposal_failed", str(proposal.get("error", "Improvement proposal failed.")))
+            return ImprovementResult(
+                False,
+                "proposal_failed",
+                str(proposal.get("error", "Improvement proposal failed.")),
+            )
 
         staged = self.stage(proposal["changes"])
         if not staged.success:
@@ -317,24 +323,31 @@ class SelfImprovementEngine:
         for path in staged.changed_files:
             result = self.validate_candidate(path)
             if not result.get("success"):
-                validation_errors.append(f"{path}: {result.get('error', 'validation failed')}")
+                validation_errors.append(
+                    f"{path}: {result.get('error', 'validation failed')}"
+                )
 
         if validation_errors:
-            return ImprovementResult(False, "test_failed", "Candidate validation failed: " + " | ".join(validation_errors)[:1200], candidate_path=staged.candidate_path, changed_files=staged.changed_files)
+            return ImprovementResult(
+                False,
+                "test_failed",
+                "Candidate validation failed: "
+                + " | ".join(validation_errors)[:1200],
+                candidate_path=staged.candidate_path,
+                changed_files=staged.changed_files,
+            )
 
         compile_result = self._compile_staged(staged.changed_files)
         if not compile_result.get("success"):
-            return ImprovementResult(False, "test_failed", str(compile_result.get("error", "Candidate compile check failed.")), candidate_path=staged.candidate_path, changed_files=staged.changed_files)
-
-        # Promote only the fixed, allowlisted cognition modules. The protected
-        # base is rejected again at the final write boundary, and originals are
-        # backed up so a partial filesystem failure can be rolled back.
-        promotion = self._promote_candidates(staged.changed_files)
-        if not promotion.get("success"):
             return ImprovementResult(
                 False,
-                "promotion_failed",
-                str(promotion.get("error", "Candidate promotion failed.")),
+                "test_failed",
+                str(
+                    compile_result.get(
+                        "error",
+                        "Candidate compile check failed.",
+                    )
+                ),
                 candidate_path=staged.candidate_path,
                 changed_files=staged.changed_files,
             )
@@ -343,13 +356,15 @@ class SelfImprovementEngine:
             objective,
             str(proposal.get("reason", "")),
             staged.changed_files,
-            "promoted_with_backup",
+            "staged_for_review",
         )
+
         return ImprovementResult(
             True,
-            "promoted_with_backup",
-            "Candidate passed syntax and compile checks and was applied only to approved cognition modules. "
-            "The protected base was untouched and backups were retained. Full behavioral tests were not run automatically.",
+            "staged_for_review",
+            "Candidate passed syntax and compile checks and was staged outside "
+            "the live source tree. The protected base was untouched. "
+            "Promotion requires an explicit owner-controlled step.",
             candidate_path=staged.candidate_path,
             changed_files=staged.changed_files,
         )
