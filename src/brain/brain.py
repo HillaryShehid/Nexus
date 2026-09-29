@@ -260,7 +260,6 @@ class NexusBrain:
             "goal": state.goal,
             "intent": state.intent,
             "capability": brief["capability"],
-            "active_layers": capability_stack["active_layers"] if "capability_stack" in locals() else [],
             "priority": brief["priority"],
             "constraints": state.constraints,
             "success_criteria": brief["success_criteria"],
