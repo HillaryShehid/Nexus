@@ -11,7 +11,7 @@ def test_exponent_explosion_is_blocked(real_tools):
 def test_chained_overflow_is_blocked(real_tools):
     result = real_tools.execute("calculator", {"expression": "100000000 * 100000000 * 100000000"})
     assert result["success"] is False
-    assert "overflow" in result["error"]
+    assert "Math Boundary Fault" in result["error"]
 
 def test_negative_and_addition_work(real_tools):
     result = real_tools.execute("calculator", {"expression": "-5 + 8"})
