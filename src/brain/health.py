@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import ast
-import os
 from pathlib import Path
 
 
@@ -33,8 +32,9 @@ class NexusHealth:
         "src/brain/self_improvement.py",
     )
 
-    def __init__(self, project_root: str = "."):
-        self.root = Path(project_root).resolve()
+    def __init__(self, project_root: str | None = None):
+        default_root = Path(__file__).resolve().parents[2]
+        self.root = Path(project_root).resolve() if project_root else default_root
 
     def run(self) -> dict:
         issues: list[str] = []
