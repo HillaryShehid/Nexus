@@ -2,7 +2,8 @@ import os
 import types
 
 MAX_PLAN_STEPS = 5
-WORKSPACE_DIR = os.path.abspath("nexus_workspace")
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+WORKSPACE_DIR = os.path.join(_PROJECT_ROOT, "nexus_workspace")
 
 _MANIFEST = {
     "web_search": {
