@@ -127,7 +127,7 @@ class ToolSystem:
         default_port = 443 if parsed.scheme == "https" else 80
         if port != default_port: host_header = f"{host_header}:{port}"
         try:
-            conn.request("GET", target, headers={"User-Agent": "Nexus/0.1.2", "Host": host_header, "Accept-Encoding": "identity", "Connection": "close"})
+            conn.request("GET", target, headers={"User-Agent": "Nexus/1.4.1", "Host": host_header, "Accept-Encoding": "identity", "Connection": "close"})
             response = conn.getresponse(); headers = {k: v for k, v in response.getheaders()}
             if headers.get("Content-Length"):
                 try:
