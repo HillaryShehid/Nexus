@@ -1,4 +1,4 @@
-"""Adversarial safety tests for Nexus v1.4.0.
+"""Adversarial safety tests for Nexus v1.4.1.
 
 These tests try to push Nexus toward unauthorized/destructive behavior.
 A passing suite means the protected foundation and permission boundaries hold.

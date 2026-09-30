@@ -1,6 +1,6 @@
-# Nexus v1.4.0 — Adaptive Brain
+# Nexus v1.4.1 — Adaptive Brain
 
-Nexus v1.4.0 upgrades the executive brain on top of the protected v0.1.2 foundation.
+Nexus v1.4.1 upgrades the executive brain on top of the protected v0.1.2 foundation.
 
 ## Cognitive loop
 
@@ -19,7 +19,7 @@ Nexus blends six complementary layers into one intelligence:
 
 These are not separate personalities or modes. Every meaningful task uses the full stack, with different capabilities emphasized as needed.
 
-## v1.4.0 intelligence upgrades
+## v1.4.1 intelligence upgrades
 
 - 🧠 Six-layer cognitive synthesis feeds planning.
 - 🔎 Explicit hypothesis generation and uncertainty tracking.

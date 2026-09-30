@@ -28,7 +28,7 @@ class ToolSystem:
     def __init__(self):
         os.makedirs(WORKSPACE_DIR, exist_ok=True)
         self.workspace_root = os.path.realpath(WORKSPACE_DIR)
-        self.memory_file = os.path.realpath(os.path.join(self.workspace_root, "nexus_memory.json"))
+        self.memory_file = os.path.abspath(os.path.join(self.workspace_root, "nexus_memory.json"))
         self.allowed_operators = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv, ast.Pow: operator.pow, ast.USub: operator.neg, ast.UAdd: operator.pos}
         self.allowed_nodes = (ast.Expression, ast.Constant, ast.BinOp, ast.UnaryOp, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.USub, ast.UAdd)
         self.dispatch_table = {"web_search": self.tool_web_search, "read_page": self.tool_read_page, "calculator": self.tool_calculator, "file_system": self.tool_file_system, "memory_store": self.tool_memory_store, "code_tester": self.tool_code_tester}
