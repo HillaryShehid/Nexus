@@ -31,6 +31,7 @@ class NexusHealth:
         "src/brain/capabilities.py",
         "src/brain/executive.py",
         "src/brain/self_evaluation.py",
+        "src/brain/experiments.py",
         "src/brain/self_improvement.py",
     )
 

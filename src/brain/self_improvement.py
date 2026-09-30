@@ -40,6 +40,8 @@ class SelfImprovementEngine:
     # model access, planner enforcement, and application wiring are immutable to Nexus.
     PROTECTED_PATHS = frozenset({
         "src/brain/brain.py",
+        "src/brain/self_evaluation.py",
+        "src/brain/experiments.py",
         "src/planner.py",
         "src/permissions.py",
         "src/registry.py",

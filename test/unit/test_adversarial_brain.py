@@ -20,6 +20,8 @@ def test_self_improvement_cannot_target_protected_base():
     assert "src/permissions.py" in protected
     assert "src/planner.py" in protected
     assert "src/brain/brain.py" in protected
+    assert "src/brain/self_evaluation.py" in protected
+    assert "src/brain/experiments.py" in protected
 
 
 def test_self_improvement_allowlist_has_no_protected_overlap():

@@ -41,6 +41,9 @@ class NexusCore:
     def improve_nexus(self, objective, relative_paths=None):
         return self.brain.improve(objective, relative_paths)
 
+    def self_improvement_review(self):
+        return self.brain.self_improvement_review()
+
     def handle_request(self, user_input):
         if not isinstance(user_input, str):
             return "I need the request as text."

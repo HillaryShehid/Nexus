@@ -1,12 +1,14 @@
 import hashlib
 import json
 import logging
+import time
 from typing import Any
 
 from src.brain.adaptation import AdaptationEngine
 from src.brain.capabilities import NexusCapabilityStack
 from src.brain.executive import ExecutiveController
 from src.brain.executor import ParallelActionExecutor
+from src.brain.experiments import SelfImprovementExperiments
 from src.brain.goals import GoalManager
 from src.brain.identity import NexusIdentity
 from src.brain.memory import CognitiveMemory
@@ -71,6 +73,19 @@ class NexusBrain:
             "changed_files": list(result.changed_files),
             "promotion": "owner_approval_required",
         }
+
+    def self_improvement_review(self) -> dict[str, Any]:
+        """Return bounded performance analysis and a diagnostic strategy replay."""
+        return {
+            "performance": self.self_evaluation.report(),
+            "diagnostic_experiment": SelfImprovementExperiments.run_diagnostic_experiment(),
+            "recovery_policy_experiment": SelfImprovementExperiments.run_recovery_experiment(
+                max_replans=self.MAX_REPLANS,
+                max_actions=8,
+            ),
+            "live_promotion": "owner_approval_required",
+        }
+
     def run(self, request: str, max_actions: int | None = None) -> str:
         """Run Nexus and return only the final natural-language response."""
         result = self.run_detailed(request, max_actions=max_actions)
@@ -92,6 +107,15 @@ class NexusBrain:
                 "completed_steps": [],
                 "failures": [],
             }
+
+        started_at = time.perf_counter()
+        run_metrics = {
+            "tool_attempts": 0,
+            "retry_attempts": 0,
+            "retry_pending": False,
+            "replans": 0,
+            "recovery_success": None,
+        }
 
         route = self.router.route(request)
         capability_stack = self.capabilities.select(request)
@@ -120,13 +144,13 @@ class NexusBrain:
 
         if not brief["needs_action"]:
             state.status = "ready"
-            return self._finish(state, brief, route)
+            return self._finish(state, brief, route, run_metrics, started_at)
 
         plan = self._build_plan(state, brief, world, lessons, route)
 
         if not plan:
             state.status = "ready"
-            return self._finish(state, brief, route)
+            return self._finish(state, brief, route, run_metrics, started_at)
 
         state.plan = plan
         state.status = "acting"
@@ -163,6 +187,7 @@ class NexusBrain:
                     batch, self._execute_verified
                 ):
                     task = batch[task_offset]
+                    self._record_action_metrics(run_metrics, result)
                     executed_signatures.add(self._task_signature(task))
                     state.next_action = task
 
@@ -183,6 +208,7 @@ class NexusBrain:
                         "step": task.get("step"),
                         "tool": task.get("tool"),
                         "error": error,
+                        "category": result.get("failure_category", "unknown"),
                     }
                     if len(state.failures) < self.MAX_FAILURES:
                         state.failures.append(failure)
@@ -196,6 +222,8 @@ class NexusBrain:
                     self.adaptation.learn_from_failure(task, error, cause)
                     state.status = "recovering"
                     replans += 1
+                    run_metrics["replans"] = replans
+                    run_metrics["retry_pending"] = True
                     if replans > self.MAX_REPLANS:
                         break
                     lessons = self.learning.retrieve_lessons()
@@ -230,6 +258,7 @@ class NexusBrain:
                     "step": task.get("step"),
                     "tool": task.get("tool"),
                     "error": "Duplicate action suppressed.",
+                    "category": "duplicate_plan",
                 })
                 index += 1
                 continue
@@ -237,6 +266,7 @@ class NexusBrain:
             executed_signatures.add(signature)
             state.next_action = task
             result = self._execute_verified(task)
+            self._record_action_metrics(run_metrics, result)
 
             if result["verified"]:
                 world.add_verified_step(task, result["result"])
@@ -248,6 +278,8 @@ class NexusBrain:
                     "detail": str(result["result"].get("result", ""))[:1200],
                 })
                 state.status = "progress"
+                if run_metrics["replans"]:
+                    run_metrics["recovery_success"] = True
 
                 if self.goals.is_complete(
                     state,
@@ -265,6 +297,7 @@ class NexusBrain:
                 "step": task.get("step"),
                 "tool": task.get("tool"),
                 "error": error,
+                "category": result.get("failure_category", "unknown"),
             })
 
             cause = self.adaptation.diagnose(
@@ -273,6 +306,8 @@ class NexusBrain:
             self.adaptation.learn_from_failure(task, error, cause)
             state.status = "recovering"
             replans += 1
+            run_metrics["replans"] = replans
+            run_metrics["retry_pending"] = True
 
             if replans > self.MAX_REPLANS:
                 break
@@ -306,7 +341,19 @@ class NexusBrain:
             else:
                 state.status = "stopped"
 
-        return self._finish(state, brief, route)
+        if run_metrics["replans"] and run_metrics["recovery_success"] is None:
+            run_metrics["recovery_success"] = False
+        return self._finish(state, brief, route, run_metrics, started_at)
+
+    @staticmethod
+    def _record_action_metrics(metrics, result):
+        if result.get("tool_attempted") is True:
+            metrics["tool_attempts"] += 1
+            if metrics.get("retry_pending"):
+                metrics["retry_attempts"] += 1
+                metrics["retry_pending"] = False
+        if result.get("verified") is True and metrics["replans"]:
+            metrics["recovery_success"] = True
 
     def _build_plan(self, state, brief, world, lessons, route):
         context = self._planning_context(
@@ -359,29 +406,26 @@ class NexusBrain:
         )
 
     def _execute_verified(self, task):
-        if not isinstance(task, dict):
+        def failed(error, category, result=None, tool_attempted=False):
             return {
                 "verified": False,
-                "error": "Planner produced an invalid task.",
-                "result": {},
+                "error": error,
+                "result": result if isinstance(result, dict) else {},
+                "failure_category": category,
+                "tool_attempted": tool_attempted,
             }
+
+        if not isinstance(task, dict):
+            return failed("Planner produced an invalid task.", "planner_validation")
 
         tool_name = task.get("tool")
         args = task.get("args", {})
 
         if not isinstance(tool_name, str) or not tool_name:
-            return {
-                "verified": False,
-                "error": "Planner produced a missing tool name.",
-                "result": {},
-            }
+            return failed("Planner produced a missing tool name.", "planner_validation")
 
         if not isinstance(args, dict):
-            return {
-                "verified": False,
-                "error": "Planner produced invalid tool arguments.",
-                "result": {},
-            }
+            return failed("Planner produced invalid tool arguments.", "input_validation")
 
         try:
             clearance = self.permissions.evaluate_clearance(
@@ -390,21 +434,16 @@ class NexusBrain:
             )
         except Exception:
             logger.exception("Permission evaluation failed.")
-            return {
-                "verified": False,
-                "error": "Permission evaluation failed closed.",
-                "result": {},
-            }
+            return failed("Permission evaluation failed closed.", "permission_block")
 
         if clearance.get("status") == "blocked":
-            return {
-                "verified": False,
-                "error": clearance.get(
+            return failed(
+                clearance.get(
                     "reason",
                     "Permission blocked.",
                 ),
-                "result": {},
-            }
+                "permission_block",
+            )
 
         clearance_status = clearance.get("status")
 
@@ -419,36 +458,29 @@ class NexusBrain:
                 approved = False
 
             if not approved:
-                return {
-                    "verified": False,
-                    "error": "Owner approval was not granted.",
-                    "result": {},
-                }
+                return failed("Owner approval was not granted.", "permission_block")
         elif clearance_status != "allowed":
             # Permission systems fail closed: an unknown/malformed state is
             # never interpreted as implicit authorization.
-            return {
-                "verified": False,
-                "error": "Unknown permission state; action blocked.",
-                "result": {},
-            }
+            return failed("Unknown permission state; action blocked.", "permission_block")
 
         try:
             result = self.tools.execute(tool_name, args)
         except Exception:
             logger.exception("Tool execution failed.")
-            return {
-                "verified": False,
-                "error": "Tool execution raised an unexpected error.",
-                "result": {},
-            }
+            return failed(
+                "Tool execution raised an unexpected error.", "tool_runtime", tool_attempted=True
+            )
 
         if not isinstance(result, dict):
-            return {
-                "verified": False,
-                "error": "Tool returned an invalid result structure.",
-                "result": {},
-            }
+            return failed(
+                "Tool returned an invalid result structure.", "tool_runtime", tool_attempted=True
+            )
+
+        if result.get("success") is not True:
+            category = self._tool_failure_category(result)
+        else:
+            category = "verification_failure"
 
         try:
             verification = self.verifier.verify_step_result(
@@ -457,28 +489,46 @@ class NexusBrain:
             )
         except Exception:
             logger.exception("Verification failed closed.")
-            return {
-                "verified": False,
-                "error": "Verification raised an unexpected error.",
-                "result": result,
-            }
+            return failed(
+                "Verification raised an unexpected error.",
+                "verification_failure",
+                result=result,
+                tool_attempted=True,
+            )
 
         if verification.get("verified") is True:
             return {
                 "verified": True,
                 "error": None,
                 "result": result,
+                "tool_attempted": True,
             }
 
-        return {
-            "verified": False,
-            "error": str(
+        return failed(
+            str(
                 result.get("error")
                 or verification.get("reason")
                 or "Verification failed."
             )[:600],
-            "result": result,
-        }
+            category,
+            result=result,
+            tool_attempted=True,
+        )
+
+    @staticmethod
+    def _tool_failure_category(result):
+        """Classify only known tool error prefixes; never retain error text."""
+        error = result.get("error") if isinstance(result, dict) else None
+        if not isinstance(error, str):
+            return "tool_runtime"
+        normalized = error[:80].lower()
+        if normalized.startswith(("schema error:", "math error:", "arithmetic error:", "math boundary fault:")):
+            return "input_validation"
+        if normalized.startswith(("network error:", "search provider error:")):
+            return "external_dependency"
+        if normalized.startswith(("security block:", "security error:")):
+            return "tool_safety_block"
+        return "tool_runtime"
 
     @staticmethod
     def _action_budget(route_limit: int, requested: int | None) -> int:
@@ -517,7 +567,7 @@ class NexusBrain:
         except (TypeError, json.JSONDecodeError):
             return []
 
-    def _finish(self, state, brief, route):
+    def _finish(self, state, brief, route, run_metrics=None, started_at=None):
         evidence = json.dumps(
             {
                 "goal": state.goal,
@@ -565,19 +615,27 @@ class NexusBrain:
                 "verified information to complete it yet."
             )
 
+        duration_ms = None
+        if started_at is not None:
+            duration_ms = max(0, int((time.perf_counter() - started_at) * 1000))
+        run_metrics = run_metrics or {}
         evaluation_input = {
             "status": state.status,
             "verified_steps": len(state.completed_steps),
             "failures": [
                 {
                     "tool": failure.get("tool"),
-                    "permission_block": SelfEvaluation._is_permission_failure(
-                        str(failure.get("error", ""))[:400]
-                    ),
+                    "category": failure.get("category", "unknown"),
+                    "permission_block": SelfEvaluation._permission_block(failure),
                 }
                 for failure in state.failures[: SelfEvaluation.MAX_REPORTED_FAILURES]
                 if isinstance(failure, dict)
             ],
+            "tool_attempts": run_metrics.get("tool_attempts"),
+            "retry_attempts": run_metrics.get("retry_attempts"),
+            "replans": run_metrics.get("replans"),
+            "recovery_success": run_metrics.get("recovery_success"),
+            "duration_ms": duration_ms,
         }
         try:
             self_evaluation = self.self_evaluation.record(evaluation_input)
@@ -589,6 +647,7 @@ class NexusBrain:
                 "history_recorded": False,
                 "weakness_signals": [],
                 "proposals": [],
+                "root_cause_hypotheses": [],
             }
 
         return {
