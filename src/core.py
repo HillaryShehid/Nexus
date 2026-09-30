@@ -52,13 +52,6 @@ class NexusCore:
         if not user_input.strip():
             return "Tell me what you want me to do."
 
-        saved = self.tools.execute(
-            "memory_store",
-            {"action": "save", "key": "chat_context", "value": user_input},
-        )
-        if not saved.get("success"):
-            logger.warning("Could not save chat context: %s", saved.get("error"))
-
         try:
             return self.brain.run(user_input)
         except Exception:

@@ -45,7 +45,7 @@ These are not separate personalities or modes. Every meaningful task uses the fu
 ## Run
 
 ```bash
-python -m pip install -r requirements.txt
+python -m pip install -e ".[dev]"
 python run.py
 ```
 

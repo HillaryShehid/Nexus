@@ -5,8 +5,10 @@ class CognitiveMemory:
     """Structured memory facade over the existing memory_store tool."""
     def __init__(self, tools): self.tools=tools
     def read_context(self):
-        r=self.tools.execute("memory_store",{"action":"read","key":"chat_context"})
-        return str(r.get("result",""))[:5000] if r.get("success") else "No conversation memory available."
+        # Conversation turns are working data, not persistent memory. Do not
+        # automatically replay an old chat_context record into future prompts.
+        return "No persisted conversation context is loaded."
+
     def read_fact(self,key):
         r=self.tools.execute("memory_store",{"action":"read","key":key[:40]})
         return str(r.get("result",""))[:1500]

@@ -76,17 +76,35 @@ class SelfImprovementEngine:
         self.project_root = Path(project_root).resolve() if project_root else Path(__file__).resolve().parents[2]
         self.workspace = Path(workspace).resolve() if workspace else Path(WORKSPACE_DIR).resolve()
         self.candidate_root = self.workspace / "self_improvements"
+        if self._contains_symlink(self.candidate_root, self.workspace):
+            raise ValueError("Candidate workspace cannot contain symlinks.")
         self.candidate_root.mkdir(parents=True, exist_ok=True)
         requested_allowlist = set(allowlist or self.DEFAULT_ALLOWLIST)
         # Even caller-supplied allowlists cannot unlock the protected base.
         self.allowlist = requested_allowlist.difference(self.PROTECTED_PATHS)
         self.tester = tester
 
+    @staticmethod
+    def _contains_symlink(path: Path, root: Path) -> bool:
+        try:
+            relative = path.relative_to(root)
+        except ValueError:
+            return True
+        current = root
+        for component in relative.parts:
+            current = current / component
+            if current.is_symlink():
+                return True
+        return False
+
     def _safe_project_path(self, relative_path: str) -> Path | None:
         if relative_path in self.PROTECTED_PATHS or relative_path not in self.allowlist:
             return None
 
-        path = (self.project_root / relative_path).resolve()
+        candidate = self.project_root / relative_path
+        if self._contains_symlink(candidate, self.project_root):
+            return None
+        path = candidate.resolve()
 
         try:
             path.relative_to(self.project_root)
@@ -268,8 +286,15 @@ class SelfImprovementEngine:
                     f"Syntax validation failed: {exc}",
                 )
 
+            if len(content.encode("utf-8")) > self.MAX_CANDIDATE_BYTES:
+                return ImprovementResult(False, "rejected", f"Candidate file is too large: {relative_path}")
+
             destination = self.candidate_root / relative_path
+            if self._contains_symlink(destination, self.candidate_root):
+                return ImprovementResult(False, "rejected", f"Candidate path contains a symlink: {relative_path}")
             destination.parent.mkdir(parents=True, exist_ok=True)
+            if self._contains_symlink(destination, self.candidate_root):
+                return ImprovementResult(False, "rejected", f"Candidate path contains a symlink: {relative_path}")
 
             fd, temporary = tempfile.mkstemp(
                 dir=str(destination.parent),
@@ -381,16 +406,24 @@ class SelfImprovementEngine:
                 if relative_path in self.PROTECTED_PATHS or relative_path not in self.allowlist:
                     return {"success": False, "error": f"Protected or unapproved path blocked: {relative_path}"}
 
-                live_path = (self.project_root / relative_path).resolve()
+                live_candidate = self.project_root / relative_path
+                if self._contains_symlink(live_candidate, self.project_root):
+                    return {"success": False, "error": f"Live source path contains a symlink: {relative_path}"}
+                live_path = live_candidate.resolve()
                 try:
-                    live_path.relative_to(self.project_root)
+                    resolved_relative = live_path.relative_to(self.project_root).as_posix()
                 except ValueError:
                     return {"success": False, "error": "Live path escaped project root."}
+                if resolved_relative != relative_path or resolved_relative in self.PROTECTED_PATHS:
+                    return {"success": False, "error": f"Resolved live path is not the exact allowlisted file: {relative_path}"}
 
                 if not live_path.is_file() or live_path.is_symlink():
                     return {"success": False, "error": f"Live source file is missing or unsafe: {relative_path}"}
 
-                candidate_path = (self.candidate_root / relative_path).resolve()
+                candidate_candidate = self.candidate_root / relative_path
+                if self._contains_symlink(candidate_candidate, self.candidate_root):
+                    return {"success": False, "error": f"Candidate path contains a symlink: {relative_path}"}
+                candidate_path = candidate_candidate.resolve()
                 try:
                     candidate_path.relative_to(self.candidate_root)
                 except ValueError:
@@ -469,6 +502,8 @@ class SelfImprovementEngine:
         its own execution limits.
         """
         candidate = self.candidate_root / relative_path
+        if self._contains_symlink(candidate, self.candidate_root):
+            return {"success": False, "error": "Candidate path contains a symlink."}
 
         try:
             candidate.resolve().relative_to(self.candidate_root)

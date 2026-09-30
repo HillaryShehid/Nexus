@@ -40,6 +40,9 @@ Do not treat confidence as evidence.
             raw = json.loads(response["content"])
             if not isinstance(raw, dict):
                 return fallback
+            needs_action = raw.get("needs_action", True)
+            if type(needs_action) is not bool:
+                return fallback
 
             def clean_list(value):
                 if not isinstance(value, list):
@@ -80,7 +83,7 @@ Do not treat confidence as evidence.
                 "known_facts": clean_list(raw.get("known_facts")),
                 "missing_information": clean_list(raw.get("missing_information")),
                 "assumptions": clean_list(raw.get("assumptions")),
-                "needs_action": bool(raw.get("needs_action", True)),
+                "needs_action": needs_action,
                 "cognitive_synthesis": {
                     key: clean_list(synthesis.get(key))
                     for key in keys
