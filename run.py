@@ -11,7 +11,7 @@ logging.basicConfig(
 
 def start_interactive_session():
     print("=========================================================")
-    print("🧠 NEXUS v1.4.0 — ADAPTIVE BRAIN")
+    print("🧠 NEXUS v1.4.1 — ADAPTIVE BRAIN")
     print("=========================================================\n")
 
     try:
