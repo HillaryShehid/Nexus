@@ -10,6 +10,7 @@ from src.brain.executor import ParallelActionExecutor
 from src.brain.goals import GoalManager
 from src.brain.identity import NexusIdentity
 from src.brain.memory import CognitiveMemory
+from src.brain.self_evaluation import SelfEvaluation
 from src.brain.self_improvement import SelfImprovementEngine
 from src.brain.router import ReasoningRouter
 from src.brain.state import CognitiveState
@@ -48,6 +49,7 @@ class NexusBrain:
         self.parallel_executor = ParallelActionExecutor()
         self.goals = GoalManager(model)
         self.adaptation = AdaptationEngine(model, learning)
+        self.self_evaluation = SelfEvaluation()
         self.self_improvement = SelfImprovementEngine(model)
         self.identity = NexusIdentity()
         self.capabilities = NexusCapabilityStack()
@@ -563,6 +565,32 @@ class NexusBrain:
                 "verified information to complete it yet."
             )
 
+        evaluation_input = {
+            "status": state.status,
+            "verified_steps": len(state.completed_steps),
+            "failures": [
+                {
+                    "tool": failure.get("tool"),
+                    "permission_block": SelfEvaluation._is_permission_failure(
+                        str(failure.get("error", ""))[:400]
+                    ),
+                }
+                for failure in state.failures[: SelfEvaluation.MAX_REPORTED_FAILURES]
+                if isinstance(failure, dict)
+            ],
+        }
+        try:
+            self_evaluation = self.self_evaluation.record(evaluation_input)
+        except Exception as exc:
+            # Metrics are best-effort and must never prevent a user response.
+            logger.warning("Self-evaluation history unavailable (%s).", type(exc).__name__)
+            self_evaluation = {
+                **SelfEvaluation.assess(evaluation_input),
+                "history_recorded": False,
+                "weakness_signals": [],
+                "proposals": [],
+            }
+
         return {
             "response": answer,
             "status": state.status,
@@ -571,4 +599,5 @@ class NexusBrain:
             "failures": list(state.failures),
             "action_count": len(state.completed_steps),
             "capability_layers": self.capabilities.select(state.request),
+            "self_evaluation": self_evaluation,
         }
