@@ -10,7 +10,7 @@ class DecisionEngine:
 
     def choose(self, state_snapshot: dict, lessons: str) -> dict:
         registry = list(SHARED_REGISTRY.keys())
-        system = f"""You are Nexus v0.2.0's decision engine.
+        system = f"""You are Nexus v1.4.1's decision engine.
 Choose the next useful action for the owner's goal.
 You may select only registered tools: {registry}.
 Do not invent tools, arguments, permissions, facts, or completed results.
