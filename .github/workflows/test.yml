@@ -20,7 +20,7 @@ jobs:
       - name: Python syntax check
         run: python -m compileall -q src run.py
       - name: Python tests
-        run: pytest -q
+        run: python -m pytest -q
 
   javascript:
     runs-on: ubuntu-latest
