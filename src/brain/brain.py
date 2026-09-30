@@ -182,7 +182,8 @@ class NexusBrain:
                         "tool": task.get("tool"),
                         "error": error,
                     }
-                    state.failures.append(failure)
+                    if len(state.failures) < self.MAX_FAILURES:
+                        state.failures.append(failure)
                     batch_failures.append((task, error))
 
                 if batch_failures:
