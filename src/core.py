@@ -1,13 +1,14 @@
 import logging
+
 from src.brain import NexusBrain
+from src.brain.health import NexusHealth
+from src.brain.task_manager import TaskManager
 from src.learning import LearningSystem
 from src.model import AIBrain
 from src.permissions import PermissionSystem
 from src.planner import Planner
 from src.tools import ToolSystem
 from src.verification import VerificationSystem
-from src.brain.task_manager import TaskManager
-from src.brain.health import NexusHealth
 
 logger = logging.getLogger("nexus.core")
 MAX_USER_INPUT = 8000
