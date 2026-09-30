@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from src.registry import WORKSPACE_DIR
+
 
 @dataclass(frozen=True)
 class ImprovementResult:
@@ -65,14 +67,14 @@ class SelfImprovementEngine:
     def __init__(
         self,
         model: Any,
-        workspace: str = "nexus_workspace",
-        project_root: str = ".",
+        workspace: str | None = None,
+        project_root: str | None = None,
         allowlist: tuple[str, ...] | None = None,
         tester: Callable[[str], dict[str, Any]] | None = None,
     ):
         self.model = model
-        self.project_root = Path(project_root).resolve()
-        self.workspace = Path(workspace).resolve()
+        self.project_root = Path(project_root).resolve() if project_root else Path(__file__).resolve().parents[2]
+        self.workspace = Path(workspace).resolve() if workspace else Path(WORKSPACE_DIR).resolve()
         self.candidate_root = self.workspace / "self_improvements"
         self.candidate_root.mkdir(parents=True, exist_ok=True)
         requested_allowlist = set(allowlist or self.DEFAULT_ALLOWLIST)
