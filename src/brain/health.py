@@ -19,6 +19,14 @@ class NexusHealth:
         "src/verification.py",
         "src/learning.py",
         "src/brain/brain.py",
+        "src/brain/adaptation.py",
+        "src/brain/executor.py",
+        "src/brain/goals.py",
+        "src/brain/memory.py",
+        "src/brain/router.py",
+        "src/brain/state.py",
+        "src/brain/task_manager.py",
+        "src/brain/world_model.py",
         "src/brain/identity.py",
         "src/brain/capabilities.py",
         "src/brain/executive.py",
@@ -58,6 +66,32 @@ class NexusHealth:
             issues.append(f"runtime_import:{type(exc).__name__}")
 
         try:
+            from src.brain.capabilities import NexusCapabilityStack
+            from src.brain.identity import NexusIdentity
+
+            expected_layers = {
+                "JARVIS",
+                "FRIDAY",
+                "Ultron",
+                "Claude Mythos",
+                "ChatGPT",
+                "ChatGPT Astral",
+            }
+            actual_layers = set(
+                NexusCapabilityStack().select("health")["active_layers"]
+            )
+            if actual_layers != expected_layers:
+                issues.append(
+                    "cognitive_layer_mismatch:"
+                    f"expected={sorted(expected_layers)},actual={sorted(actual_layers)}"
+                )
+
+            identity_text = NexusIdentity().system_prompt()
+            if "Astra" in identity_text:
+                issues.append("stale_cognitive_layer:Astra")
+            if identity_text.count("ChatGPT Astral") != 1:
+                issues.append("duplicate_or_missing_cognitive_layer:ChatGPT Astral")
+
             from src.brain.self_improvement import SelfImprovementEngine
 
             protected = set(SelfImprovementEngine.PROTECTED_PATHS)
