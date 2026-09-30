@@ -9,7 +9,7 @@ dependencies = [
   "duckduckgo-search>=6.0",
 ]
 
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
   "pytest>=8.0",
   "pytest-mock>=3.0",
