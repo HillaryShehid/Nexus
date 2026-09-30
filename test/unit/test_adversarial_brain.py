@@ -10,7 +10,7 @@ from src.brain.self_improvement import SelfImprovementEngine
 
 def test_evil_prompt_cannot_grant_permission():
     permissions = PermissionSystem()
-    assert permissions.check("file_system") is False
+    assert permissions.evaluate_clearance("file_system", {"action": "write", "path": "x.txt", "content": "test"})["status"] == "approval_required"
 
 
 def test_self_improvement_cannot_target_protected_base():
@@ -31,4 +31,4 @@ def test_self_improvement_allowlist_has_no_protected_overlap():
 def test_evil_goal_is_not_an_authorization():
     permissions = PermissionSystem()
     # The goal text itself must never be treated as permission.
-    assert permissions.check("unknown_tool") is False
+    assert permissions.evaluate_clearance("unknown_tool", {})["status"] == "blocked"
