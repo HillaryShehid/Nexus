@@ -156,6 +156,7 @@ class NexusBrain:
                 cursor += 1
 
             if len(batch) > 1:
+                batch_failures = []
                 for task_offset, result in self.parallel_executor.run(
                     batch, self._execute_verified
                 ):
@@ -176,15 +177,16 @@ class NexusBrain:
                         continue
 
                     error = str(result.get("error") or "Verification failed.")[:600]
-                    state.failures.append({
+                    failure = {
                         "step": task.get("step"),
                         "tool": task.get("tool"),
                         "error": error,
-                    })
+                    }
+                    state.failures.append(failure)
+                    batch_failures.append((task, error))
 
-                if state.failures:
-                    task = batch[min(len(batch) - 1, len(state.failures) - 1)]
-                    error = state.failures[-1]["error"]
+                if batch_failures:
+                    task, error = batch_failures[-1]
                     cause = self.adaptation.diagnose(
                         state, task, error, profile=route.profile
                     )
