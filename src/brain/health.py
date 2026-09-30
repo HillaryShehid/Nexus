@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 
@@ -87,7 +88,7 @@ class NexusHealth:
                 )
 
             identity_text = NexusIdentity().system_prompt()
-            if "Astra" in identity_text:
+            if re.search(r"\\bAstra\\b", identity_text):
                 issues.append("stale_cognitive_layer:Astra")
             if identity_text.count("ChatGPT Astral") != 1:
                 issues.append("duplicate_or_missing_cognitive_layer:ChatGPT Astral")
