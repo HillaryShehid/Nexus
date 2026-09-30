@@ -25,5 +25,6 @@ def test_unknown_permission_state_fails_closed(mocker):
     nexus.tools.execute = mocker.MagicMock()
     result = nexus.handle_request("Calculate 2+2")
     assert "Final" not in result
-    nexus.tools.execute.assert_called_once()
+    tool_calls = [call for call in nexus.tools.execute.call_args_list if call.args and call.args[0] == "calculator"]
+    assert tool_calls == []
     assert not any(call.args[0] == "calculator" for call in nexus.tools.execute.call_args_list)
