@@ -403,7 +403,9 @@ class NexusBrain:
                 "result": {},
             }
 
-        if clearance.get("status") == "approval_required":
+        clearance_status = clearance.get("status")
+
+        if clearance_status == "approval_required":
             try:
                 approved = self.permissions.request_user_clearance(
                     tool_name,
@@ -419,6 +421,14 @@ class NexusBrain:
                     "error": "Owner approval was not granted.",
                     "result": {},
                 }
+        elif clearance_status != "allowed":
+            # Permission systems fail closed: an unknown/malformed state is
+            # never interpreted as implicit authorization.
+            return {
+                "verified": False,
+                "error": "Unknown permission state; action blocked.",
+                "result": {},
+            }
 
         try:
             result = self.tools.execute(tool_name, args)
