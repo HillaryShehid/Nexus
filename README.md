@@ -37,11 +37,12 @@ These are not separate personalities or modes. Every meaningful task uses the fu
 
 ## Structured world model
 
-- Run-local knowledge is typed as `fact`, `observation`, `inference`, `hypothesis`, or `unknown`.
-- Source-backed facts carry short cited excerpts, source provenance, confidence, evidence status, and timestamps. Source support is recorded as evidence, not ground truth.
+- Run-local knowledge is typed as `fact`, `observation`, `inference`, `hypothesis`, or `unknown`, with a claim, evidence, sources, confidence, status, timestamps, and freshness assessment.
+- Source-backed facts carry short cited excerpts, source provenance, confidence, freshness signals, and timestamps. Verbatim evidence can be verified while the claim itself remains unproven.
 - Verified tool outcomes and failure categories are observations. A model-generated root-cause suggestion is a low-confidence, untested hypothesis; an undetermined cause stays an unknown.
 - Cross-source disagreements are kept as conflict observations and linked to a fact only when the research validator ties them to that exact claim.
 - Snapshots are bounded and serialize as valid JSON when trimmed for prompts.
+- Planning receives the structured world model. Chosen actions retain a short rationale and only validated world knowledge IDs, so the final response can explain how research informed an action.
 
 ## Research and self-improvement limits
 

@@ -46,15 +46,59 @@ def test_research_report_becomes_source_linked_fact_and_unknown_records():
     unknown = next(item for item in snapshot["knowledge"] if item["kind"] == "unknown")
 
     assert snapshot["facts"] == ["pytest supports fixtures"]
+    assert fact["type"] == "fact"
+    assert fact["claim"] == "pytest supports fixtures"
     assert fact["confidence"] == "high"
     assert fact["status"] == "source_supported"
+    assert fact["sources"][0]["title"] == "pytest documentation"
     assert fact["provenance"][0]["source_date"] == "2026-09-29"
     assert fact["evidence"][0]["source_id"] == "S1"
+    assert fact["timestamp"]
     assert fact["last_checked_at"]
+    assert fact["freshness"]["assessment"] == "recent_year_mentioned"
+    assert fact["verification"]["evidence_checked"] is True
+    assert fact["verification"]["claim_truth_verified"] is False
     assert "ground truth" in fact["verification_scope"]
     assert unknown["status"] == "unresolved"
     assert unknown["confidence"] == "low"
     assert world.research["status"] == "enough_evidence"
+
+
+def test_freshness_and_confidence_reflect_mixed_or_unknown_source_signals():
+    recent = _source("S1", "docs.example.org", "Current docs")
+    old = _source("S2", "archive.example.net", "Archived docs")
+    old["freshness_signal"] = "older_year_mentioned"
+    world = WorldModel()
+    world.add_research_report({
+        "sources": [recent, old],
+        "claims": [{
+            "claim": "The feature is supported.",
+            "evidence": [
+                {"source_id": "S1", "excerpt": "The feature is supported in this release."},
+                {"source_id": "S2", "excerpt": "The feature was supported in an older release."},
+            ],
+        }],
+        "confidence": "high",
+    })
+
+    mixed_fact = world.snapshot()["knowledge"][0]
+    assert mixed_fact["freshness"]["assessment"] == "mixed_year_signals"
+    assert mixed_fact["confidence"] == "low"
+
+    unknown = _source("S3", "docs.unknown.example", "Undated docs")
+    unknown["freshness_signal"] = "unknown"
+    world.add_research_report({
+        "sources": [unknown],
+        "claims": [{
+            "claim": "The documentation has no visible year.",
+            "evidence": [{"source_id": "S3", "excerpt": "This documentation page has no visible year."}],
+        }],
+        "confidence": "high",
+    })
+
+    undated_fact = world.snapshot()["knowledge"][-1]
+    assert undated_fact["freshness"]["assessment"] == "unknown"
+    assert undated_fact["confidence"] == "medium"
 
 
 def test_conflicting_sources_are_stored_as_an_observation_without_claiming_truth():
@@ -87,8 +131,10 @@ def test_conflicting_sources_are_stored_as_an_observation_without_claiming_truth
 
     assert fact["status"] == "conflicted"
     assert conflict["kind"] == "observation"
+    assert conflict["type"] == "observation"
     assert len(conflict["evidence"]) == 2
     assert conflict["knowledge_id"] in fact["conflicts_with"]
+    assert fact["contradictions"] == fact["conflicts_with"]
     assert fact["knowledge_id"] in conflict["conflicts_with"]
     assert world.snapshot()["facts"] == []
     assert "underlying truth remains unresolved" in conflict["verification_scope"]

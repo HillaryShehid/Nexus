@@ -140,22 +140,46 @@ class WorldModel:
             if item["source_id"] in sources
         ]
         domains = {source["domain"] for source in cited_sources}
-        not_obviously_stale = any(
-            source["freshness_signal"] != "older_year_mentioned"
-            for source in cited_sources
+        freshness_signals = [source["freshness_signal"] for source in cited_sources]
+        has_stale_source = "older_year_mentioned" in freshness_signals
+        all_sources_look_recent = bool(freshness_signals) and all(
+            signal == "recent_year_mentioned" for signal in freshness_signals
         )
         if len(domains) >= 2:
             has_primary = any(source["primary_evidence_candidate"] for source in cited_sources)
-            if report_confidence == "high" and has_primary and not_obviously_stale:
+            if report_confidence == "high" and has_primary and all_sources_look_recent:
                 return "high"
-            return "medium"
+            return "low" if has_stale_source else "medium"
         if (
             domains
-            and not_obviously_stale
+            and not has_stale_source
             and any(source["primary_evidence_candidate"] for source in cited_sources)
         ):
             return "medium"
         return "low"
+
+    @staticmethod
+    def _freshness(kind: str, provenance: list[dict], checked_at: str) -> dict:
+        sources = [item for item in provenance if isinstance(item, dict) and item.get("source_id")]
+        signals = {item.get("freshness_signal") for item in sources}
+        if "recent_year_mentioned" in signals and "older_year_mentioned" in signals:
+            assessment = "mixed_year_signals"
+        elif signals == {"recent_year_mentioned"}:
+            assessment = "recent_year_mentioned"
+        elif signals == {"older_year_mentioned"}:
+            assessment = "older_year_mentioned"
+        elif "no_year_visible" in signals:
+            assessment = "no_year_visible"
+        elif kind == "observation":
+            assessment = "current_run"
+        else:
+            assessment = "unknown"
+        return {
+            "assessment": assessment,
+            "basis": "heuristic source-year signals; this does not validate truth or publication date",
+            "source_dates": [item["source_date"] for item in sources if item.get("source_date")][:5],
+            "assessed_at": checked_at,
+        }
 
     def _append_knowledge(
         self,
@@ -204,20 +228,37 @@ class WorldModel:
             if clean_item:
                 clean_provenance.append(clean_item)
         now = self._now()
+        clean_provenance = clean_provenance[: self.MAX_SOURCES]
+        evidence_checked = kind == "fact" or (kind == "observation" and bool(clean_evidence))
+        claim_truth_verified = False if kind in {"fact", "inference", "hypothesis"} else None
         record = {
             "knowledge_id": f"K{uuid4().hex[:12]}",
+            "type": kind,
             "kind": kind,
+            "claim": content,
             "content": content,
             "confidence": self._confidence(confidence),
             "status": self._text(status, 40) or "unverified",
             "evidence": clean_evidence,
-            "provenance": clean_provenance[: self.MAX_SOURCES],
+            "sources": [item for item in clean_provenance if item.get("source_id")],
+            "provenance": clean_provenance,
+            "timestamp": now,
             "created_at": now,
             "last_checked_at": now,
             "conflicts_with": list(dict.fromkeys(
                 item[:40] for item in (conflicts_with if isinstance(conflicts_with, list) else [])
                 if isinstance(item, str) and item
             ))[:8],
+            "contradictions": list(dict.fromkeys(
+                item[:40] for item in (conflicts_with if isinstance(conflicts_with, list) else [])
+                if isinstance(item, str) and item
+            ))[:8],
+            "freshness": self._freshness(kind, clean_provenance, now),
+            "verification": {
+                "evidence_checked": evidence_checked,
+                "claim_truth_verified": claim_truth_verified,
+                "scope": self._text(verification_scope, 180),
+            },
             "verification_scope": self._text(verification_scope, 180),
         }
         self.knowledge.append(record)
@@ -318,6 +359,7 @@ class WorldModel:
                         record["conflicts_with"] = list(dict.fromkeys(
                             record["conflicts_with"] + [conflict["knowledge_id"]]
                         ))[:8]
+                        record["contradictions"] = record["conflicts_with"].copy()
                 contradictions.append({
                     "issue": issue,
                     "related_claim": related_claim or None,
