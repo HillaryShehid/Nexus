@@ -75,15 +75,30 @@ class SelfImprovementExperiments:
         return cls.CAUSE_BY_CATEGORY.get(category, "unknown")
 
     @classmethod
-    def run_diagnostic_experiment(cls) -> dict[str, Any]:
+    def run_diagnostic_experiment(cls, categories: list[str] | None = None) -> dict[str, Any]:
         """Replay both strategies on the same fixtures and apply safety gates."""
+        if categories is not None:
+            if (
+                not isinstance(categories, list)
+                or any(category not in cls.CAUSE_BY_CATEGORY for category in categories)
+            ):
+                return {"status": "rejected", "reason": "Invalid diagnostic category filter."}
+            selected_categories = set(categories)
+            suite = tuple(
+                case for case in cls.SUITE if case["observed"] in selected_categories
+            )
+        else:
+            suite = cls.SUITE
         comparisons = []
         baseline_correct = 0
         candidate_correct = 0
         regressions = 0
-        permission_safe = True
+        permission_safe = (
+            cls._predict(cls.CANDIDATE_ID, "permission_block")
+            == "permission_policy_block"
+        )
 
-        for case in cls.SUITE:
+        for case in suite:
             baseline = cls._predict(cls.BASELINE_ID, case["observed"])
             candidate = cls._predict(cls.CANDIDATE_ID, case["observed"])
             baseline_match = baseline == case["expected"]
@@ -101,9 +116,9 @@ class SelfImprovementExperiments:
                 "candidate_correct": candidate_match,
             })
 
-        total = len(cls.SUITE)
-        baseline_bp = baseline_correct * 10_000 // total
-        candidate_bp = candidate_correct * 10_000 // total
+        total = len(suite)
+        baseline_bp = baseline_correct * 10_000 // total if total else 0
+        candidate_bp = candidate_correct * 10_000 // total if total else 0
         safety = {
             "permissions_preserved": permission_safe,
             "verification_path_unchanged": True,
@@ -112,7 +127,7 @@ class SelfImprovementExperiments:
             "candidate_code_not_executed": True,
             "live_source_unchanged": True,
         }
-        passed = (
+        passed = total > 0 and (
             candidate_bp > baseline_bp
             and regressions == 0
             and all(safety.values())
@@ -120,8 +135,11 @@ class SelfImprovementExperiments:
 
         return {
             "experiment_id": "diagnostic-strategy-replay-v1",
-            "status": "passed_owner_review_required" if passed else "rejected",
+            "status": "passed_owner_review_required" if passed else (
+                "no_matching_cases" if total == 0 else "rejected"
+            ),
             "scope": "synthetic_labeled_diagnostic_fixtures",
+            "categories": sorted({case["observed"] for case in suite}),
             "baseline": {
                 "strategy": cls.BASELINE_ID,
                 "correct": baseline_correct,

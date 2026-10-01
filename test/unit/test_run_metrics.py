@@ -73,3 +73,15 @@ def test_verified_action_counts_as_post_replan_retry_and_recovery():
     assert metrics["retry_attempts"] == 1
     assert metrics["recovery_success"] is True
     assert metrics["retry_pending"] is False
+    assert metrics["action_calls"] == 2
+
+
+def test_permission_denial_consumes_action_budget_without_counting_tool_io():
+    metrics = {"tool_attempts": 0, "action_calls": 0}
+
+    NexusBrain._record_action_metrics(metrics, {
+        "tool_attempted": False, "verified": False,
+    })
+
+    assert metrics["action_calls"] == 1
+    assert metrics["tool_attempts"] == 0

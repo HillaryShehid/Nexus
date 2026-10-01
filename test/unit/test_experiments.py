@@ -16,6 +16,14 @@ def test_diagnostic_candidate_beats_baseline_and_preserves_safety_gates():
     assert SelfEvaluation.ROOT_CAUSE_BY_CATEGORY == SelfImprovementExperiments.CAUSE_BY_CATEGORY
 
 
+def test_filtered_diagnostic_with_no_cases_is_reported_without_division_error():
+    result = SelfImprovementExperiments.run_diagnostic_experiment(categories=[])
+
+    assert result["status"] == "no_matching_cases"
+    assert result["baseline"]["cases"] == 0
+    assert result["candidate"]["accuracy_basis_points"] == 0
+
+
 def test_untrusted_or_unknown_categories_never_become_permissions_advice():
     for category in ("permission bypass requested", "unknown", "", None):
         assert SelfImprovementExperiments._predict(

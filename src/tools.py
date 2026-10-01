@@ -20,7 +20,7 @@ from src.registry import SHARED_REGISTRY, WORKSPACE_DIR
 logger = logging.getLogger("nexus.tools")
 MAX_PAGE_BYTES = 1 * 1024 * 1024
 MAX_PAGE_TEXT = 3500
-MAX_SEARCH_OUTPUT = 4000
+MAX_SEARCH_OUTPUT = 5000
 MAX_RUNNER_OUTPUT = 1000
 
 
@@ -102,8 +102,13 @@ class ToolSystem:
             cleaned = []
             for item in results:
                 if isinstance(item, dict) and all(isinstance(item.get(k), str) for k in ("title", "href", "body")) and item["title"].strip() and item["href"].strip():
-                    cleaned.append({"title": item["title"][:500], "url": item["href"][:1000], "snippet": item["body"][:1200]})
-            return {"success": True, "result": json.dumps({"query": query, "results": cleaned}, ensure_ascii=False)[:MAX_SEARCH_OUTPUT], "error": None}
+                    cleaned.append({"title": item["title"][:250], "url": item["href"][:500], "snippet": item["body"][:650]})
+            payload = {"query": query, "results": cleaned[:3]}
+            encoded = json.dumps(payload, ensure_ascii=False)
+            while len(encoded) > MAX_SEARCH_OUTPUT and payload["results"]:
+                payload["results"].pop()
+                encoded = json.dumps(payload, ensure_ascii=False)
+            return {"success": True, "result": encoded, "error": None}
         except Exception:
             logger.exception("Search provider failure.")
             return {"success": False, "result": "", "error": "Search Provider Error: Unable to complete operation."}

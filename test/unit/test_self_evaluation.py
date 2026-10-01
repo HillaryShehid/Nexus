@@ -258,3 +258,27 @@ def test_v1_history_migrates_without_inventing_unavailable_metrics(tmp_path):
     migrated_store = json.loads(store.read_text(encoding="utf-8"))
     assert migrated_store["schema_version"] == SelfEvaluation.SCHEMA_VERSION
     assert len(migrated_store["records"]) == 2
+
+
+def test_repeated_unrecovered_replanning_becomes_a_measured_weakness():
+    records = []
+    for index in range(4):
+        records.append({
+            "record_id": f"{index:032x}",
+            "failure_tools": [],
+            "replans": 1,
+            "recovery_success": index == 0,
+        })
+
+    signals = SelfEvaluation._detect_weaknesses(records)
+
+    assert signals == [{
+        "type": "unrecovered_replanning",
+        "distinct_runs": 3,
+        "failure_events": 3,
+        "window_runs": 4,
+        "threshold": 3,
+    }]
+    proposal = SelfEvaluation._proposal(signals[0])
+    assert proposal["status"] == "proposal_only"
+    assert "Synthetic recovery replay" in proposal["required_tests"][0]

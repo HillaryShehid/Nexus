@@ -30,6 +30,19 @@ def test_self_improvement_uses_repo_root_by_default():
     assert engine.workspace == Path(WORKSPACE_DIR).resolve()
 
 
+def test_autonomous_research_and_experiment_controls_are_protected():
+    engine = SelfImprovementEngine(model=None, allowlist=(
+        "src/brain/research.py",
+        "src/brain/self_improvement_loop.py",
+        "src/brain/self_evaluation.py",
+        "src/brain/experiments.py",
+        "src/brain/executive.py",
+        "src/brain/world_model.py",
+    ))
+
+    assert engine.allowlist == set()
+
+
 def test_parallel_executor_preserves_original_order():
     executor = ParallelActionExecutor()
     tasks = [

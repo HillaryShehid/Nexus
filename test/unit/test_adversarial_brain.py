@@ -21,6 +21,10 @@ def test_self_improvement_cannot_target_protected_base():
     assert "src/planner.py" in protected
     assert "src/brain/brain.py" in protected
     assert "src/brain/self_evaluation.py" in protected
+    assert "src/brain/self_improvement_loop.py" in protected
+    assert "src/brain/research.py" in protected
+    assert "src/brain/executive.py" in protected
+    assert "src/brain/world_model.py" in protected
     assert "src/brain/experiments.py" in protected
 
 

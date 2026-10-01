@@ -472,12 +472,46 @@ class SelfEvaluation:
             for tool, run_ids in run_ids_by_tool.items()
             if len(run_ids) >= cls.MIN_FAILURE_RUNS
         ]
-        signals.sort(key=lambda item: (-item["distinct_runs"], item["tool"]))
+        replanned = [record for record in recent if (record.get("replans") or 0) > 0]
+        unrecovered = [
+            record for record in replanned
+            if record.get("recovery_success") is False
+        ]
+        if (
+            len(unrecovered) >= cls.MIN_FAILURE_RUNS
+            and len(unrecovered) * 10_000 // len(replanned) >= 7_500
+        ):
+            signals.append({
+                "type": "unrecovered_replanning",
+                "distinct_runs": len(unrecovered),
+                "failure_events": sum(record.get("replans") or 0 for record in unrecovered),
+                "window_runs": len(recent),
+                "threshold": cls.MIN_FAILURE_RUNS,
+            })
+        signals.sort(key=lambda item: (-item["distinct_runs"], item.get("tool", item["type"])))
         return signals[: cls.MAX_WEAKNESS_SIGNALS]
 
     @staticmethod
     def _proposal(signal: dict[str, Any]) -> dict[str, Any]:
-        tool = signal["tool"]
+        tool = signal.get("tool")
+        if signal.get("type") == "unrecovered_replanning":
+            return {
+                "problem": "Repeated recovery attempts have not produced verified progress.",
+                "evidence": {
+                    "distinct_runs": signal["distinct_runs"],
+                    "replan_events": signal["failure_events"],
+                    "analysis_window_runs": signal["window_runs"],
+                    "required_distinct_runs": signal["threshold"],
+                },
+                "suspected_cause": "Unknown; replay evidence is needed before changing recovery behavior.",
+                "proposed_improvement": "Compare bounded recovery policies against the same labeled cases.",
+                "expected_benefit": "Reduce unproductive replanning while preserving verified task success.",
+                "potential_risks": ["Synthetic replay may not predict live recovery quality."],
+                "affected_components": ["recovery policy", "planner", "verification"],
+                "required_tests": ["Synthetic recovery replay", "Permission and verification regression tests."],
+                "rollback_strategy": "Keep any candidate inactive and require owner approval before promotion.",
+                "status": "proposal_only",
+            }
         return {
             "problem": f"Repeated failures have been observed for tool '{tool}'.",
             "evidence": {
