@@ -20,7 +20,7 @@ from src.registry import SHARED_REGISTRY, WORKSPACE_DIR
 logger = logging.getLogger("nexus.tools")
 MAX_PAGE_BYTES = 1 * 1024 * 1024
 MAX_PAGE_TEXT = 3500
-MAX_SEARCH_OUTPUT = 4000
+MAX_SEARCH_OUTPUT = 5000
 MAX_RUNNER_OUTPUT = 1000
 
 
@@ -28,7 +28,7 @@ class ToolSystem:
     def __init__(self):
         os.makedirs(WORKSPACE_DIR, exist_ok=True)
         self.workspace_root = os.path.realpath(WORKSPACE_DIR)
-        self.memory_file = os.path.realpath(os.path.join(self.workspace_root, "nexus_memory.json"))
+        self.memory_file = os.path.abspath(os.path.join(self.workspace_root, "nexus_memory.json"))
         self.allowed_operators = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv, ast.Pow: operator.pow, ast.USub: operator.neg, ast.UAdd: operator.pos}
         self.allowed_nodes = (ast.Expression, ast.Constant, ast.BinOp, ast.UnaryOp, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.USub, ast.UAdd)
         self.dispatch_table = {"web_search": self.tool_web_search, "read_page": self.tool_read_page, "calculator": self.tool_calculator, "file_system": self.tool_file_system, "memory_store": self.tool_memory_store, "code_tester": self.tool_code_tester}
@@ -97,13 +97,25 @@ class ToolSystem:
 
     def tool_web_search(self, query):
         try:
-            from duckduckgo_search import DDGS
-            with DDGS() as ddgs: results = list(ddgs.text(query, max_results=3))
+            try:
+                from ddgs import DDGS
+            except ImportError:
+                # Keep existing installations usable until they install the renamed package.
+                from duckduckgo_search import DDGS
+            with DDGS() as ddgs: results = list(ddgs.text(query, max_results=3, backend="auto"))
             cleaned = []
             for item in results:
                 if isinstance(item, dict) and all(isinstance(item.get(k), str) for k in ("title", "href", "body")) and item["title"].strip() and item["href"].strip():
-                    cleaned.append({"title": item["title"][:500], "url": item["href"][:1000], "snippet": item["body"][:1200]})
-            return {"success": True, "result": json.dumps({"query": query, "results": cleaned}, ensure_ascii=False)[:MAX_SEARCH_OUTPUT], "error": None}
+                    cleaned.append({"title": item["title"][:250], "url": item["href"][:500], "snippet": item["body"][:650]})
+            if not cleaned:
+                logger.warning("Search provider returned no usable results for query.")
+                return {"success": False, "result": "", "error": "Search Provider Error: No search results were returned."}
+            payload = {"query": query, "results": cleaned[:3]}
+            encoded = json.dumps(payload, ensure_ascii=False)
+            while len(encoded) > MAX_SEARCH_OUTPUT and payload["results"]:
+                payload["results"].pop()
+                encoded = json.dumps(payload, ensure_ascii=False)
+            return {"success": True, "result": encoded, "error": None}
         except Exception:
             logger.exception("Search provider failure.")
             return {"success": False, "result": "", "error": "Search Provider Error: Unable to complete operation."}

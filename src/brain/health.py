@@ -30,6 +30,10 @@ class NexusHealth:
         "src/brain/identity.py",
         "src/brain/capabilities.py",
         "src/brain/executive.py",
+        "src/brain/self_evaluation.py",
+        "src/brain/self_improvement_loop.py",
+        "src/brain/research.py",
+        "src/brain/experiments.py",
         "src/brain/self_improvement.py",
     )
 
@@ -88,7 +92,7 @@ class NexusHealth:
                 )
 
             identity_text = NexusIdentity().system_prompt()
-            if re.search(r"\\bAstra\\b", identity_text):
+            if re.search(r"\bAstra\b", identity_text):
                 issues.append("stale_cognitive_layer:Astra")
             if identity_text.count("ChatGPT Astral") != 1:
                 issues.append("duplicate_or_missing_cognitive_layer:ChatGPT Astral")

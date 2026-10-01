@@ -11,7 +11,7 @@ logger = logging.getLogger("nexus.learning")
 class LearningSystem:
     def __init__(self):
         os.makedirs(WORKSPACE_DIR, exist_ok=True)
-        self.log_path = os.path.realpath(os.path.join(WORKSPACE_DIR, "nexus_lessons.json"))
+        self.log_path = os.path.abspath(os.path.join(WORKSPACE_DIR, "nexus_lessons.json"))
         self.max_lessons_ceiling = 5
 
     def _load(self) -> list:

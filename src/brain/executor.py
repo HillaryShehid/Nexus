@@ -19,7 +19,19 @@ class ParallelActionExecutor:
     def run(self, tasks: list[dict], execute) -> list[tuple[int, dict]]:
         """Return (original_index, result) pairs in original task order."""
         if len(tasks) <= 1:
-            return [(0, execute(tasks[0]))] if tasks else []
+            if not tasks:
+                return []
+            try:
+                return [(0, execute(tasks[0]))]
+            except Exception as exc:
+                return [(
+                    0,
+                    {
+                        "verified": False,
+                        "error": f"Parallel execution failed: {type(exc).__name__}",
+                        "result": {},
+                    },
+                )]
 
         results: dict[int, dict] = {}
         with ThreadPoolExecutor(max_workers=min(self.MAX_WORKERS, len(tasks))) as pool:

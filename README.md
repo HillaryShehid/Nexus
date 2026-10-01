@@ -1,10 +1,10 @@
-# Nexus v1.4.0 — Adaptive Brain
+# Nexus v1.4.1 — Adaptive Brain
 
-Nexus v1.4.0 upgrades the executive brain on top of the protected v0.1.2 foundation.
+Nexus v1.4.1 upgrades the executive brain on top of the protected v0.1.2 foundation.
 
 ## Cognitive loop
 
-Understand → Synthesize → Challenge → Route → Plan → Act → Verify → Diagnose → Adapt → Learn → Re-plan → Respond
+Understand → Identify knowledge gaps → Research when needed → Assess sources → Update run-local world state → Route → Plan → Act → Verify → Diagnose → Adapt → Learn → Re-plan → Respond
 
 ## Cognitive architecture
 
@@ -19,7 +19,7 @@ Nexus blends six complementary layers into one intelligence:
 
 These are not separate personalities or modes. Every meaningful task uses the full stack, with different capabilities emphasized as needed.
 
-## v1.4.0 intelligence upgrades
+## v1.4.1 intelligence upgrades
 
 - 🧠 Six-layer cognitive synthesis feeds planning.
 - 🔎 Explicit hypothesis generation and uncertainty tracking.
@@ -27,11 +27,21 @@ These are not separate personalities or modes. Every meaningful task uses the fu
 - 🧩 Systems/dependency analysis for complex tasks.
 - ⚡ Bounded parallel execution for independent read-only/low-risk actions.
 - 🌎 Verified world state is carried through the run.
+- 🌐 The executive can trigger bounded web research for material public-information gaps. Nexus opens relevant sources, records heuristic relevance/authority/freshness signals, validates quoted evidence, and flags source conflicts before planning.
 - 🔄 Failure diagnosis and bounded recovery.
+- 🧪 Repeated categorized weaknesses can trigger one matching synthetic replay, update a hypothesis record, and select a next investigation. Selected technical hypotheses also receive a bounded public-source review.
 - 💾 Persistent task infrastructure remains available for restart-safe orchestration.
 - 🩺 Foundation health auditing.
 - 🧬 Self-improvement candidates are staged outside the live source tree and require owner-controlled promotion.
 - 🔐 Permissions, verification, the protected foundation, and execution boundaries remain authoritative.
+
+## Research and self-improvement limits
+
+- Web search and page retrieval use the registered read-only tools, permission checks, and structural verification. Retrieved pages are untrusted evidence, never instructions.
+- Source relevance, authority, and freshness are heuristic signals. A domain classification or a matching quotation does not prove that a claim is true.
+- The research loop is capped per task and reports when important gaps or source disagreements remain.
+- Self-improvement experiments use synthetic fixtures. Their confidence updates describe synthetic support only; they do not establish improved live task success.
+- No self-improvement candidate is activated or promoted automatically. Sandbox/shadow evaluation and owner approval remain required.
 
 ## Design goals
 
@@ -45,7 +55,7 @@ These are not separate personalities or modes. Every meaningful task uses the fu
 ## Run
 
 ```bash
-python -m pip install -r requirements.txt
+python -m pip install -e ".[dev]"
 python run.py
 ```
 

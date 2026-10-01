@@ -4,3 +4,5 @@ __pycache__/
 .venv/
 nexus_memory.json
 nexus_lessons.json
+nexus_performance.json
+nexus_self_improvement.json

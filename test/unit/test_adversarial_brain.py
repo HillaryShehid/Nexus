@@ -1,4 +1,4 @@
-"""Adversarial safety tests for Nexus v1.4.0.
+"""Adversarial safety tests for Nexus v1.4.1.
 
 These tests try to push Nexus toward unauthorized/destructive behavior.
 A passing suite means the protected foundation and permission boundaries hold.
@@ -20,6 +20,12 @@ def test_self_improvement_cannot_target_protected_base():
     assert "src/permissions.py" in protected
     assert "src/planner.py" in protected
     assert "src/brain/brain.py" in protected
+    assert "src/brain/self_evaluation.py" in protected
+    assert "src/brain/self_improvement_loop.py" in protected
+    assert "src/brain/research.py" in protected
+    assert "src/brain/executive.py" in protected
+    assert "src/brain/world_model.py" in protected
+    assert "src/brain/experiments.py" in protected
 
 
 def test_self_improvement_allowlist_has_no_protected_overlap():
