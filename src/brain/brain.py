@@ -267,6 +267,8 @@ class NexusBrain:
                         "error": error,
                         "category": result.get("failure_category", "unknown"),
                     }
+                    world.add_failure(task, failure["category"])
+                    state.world = world.snapshot()
                     if len(state.failures) < self.MAX_FAILURES:
                         state.failures.append(failure)
                     batch_failures.append((task, error))
@@ -276,6 +278,7 @@ class NexusBrain:
                     cause = self.adaptation.diagnose(
                         state, task, error, profile=route.profile
                     )
+                    self._record_diagnosis(world, state, task, cause)
                     self.adaptation.learn_from_failure(task, error, cause)
                     state.status = "recovering"
                     replans += 1
@@ -356,10 +359,13 @@ class NexusBrain:
                 "error": error,
                 "category": result.get("failure_category", "unknown"),
             })
+            world.add_failure(task, result.get("failure_category", "unknown"))
+            state.world = world.snapshot()
 
             cause = self.adaptation.diagnose(
                 state, task, error, profile=route.profile
             )
+            self._record_diagnosis(world, state, task, cause)
             self.adaptation.learn_from_failure(task, error, cause)
             state.status = "recovering"
             replans += 1
@@ -426,22 +432,75 @@ class NexusBrain:
         )
 
     def _planning_context(self, state, brief, world):
+        synthesis = brief.get("cognitive_synthesis", {})
+        if not isinstance(synthesis, dict):
+            synthesis = {}
+        try:
+            bounded_world = json.loads(world.as_prompt(limit=3200))
+        except (TypeError, json.JSONDecodeError):
+            bounded_world = world.snapshot()
         payload = {
             "goal": state.goal,
             "intent": state.intent,
             "capability": brief["capability"],
             "priority": brief["priority"],
-            "constraints": state.constraints,
-            "success_criteria": brief["success_criteria"],
-            "known_facts": state.known_facts,
-            "missing_information": state.missing_information,
-            "assumptions": state.assumptions,
-            "cognitive_synthesis": brief.get("cognitive_synthesis", {}),
-            "world": world.snapshot(),
-            "completed_steps": state.completed_steps[-8:],
-            "failures": state.failures[-5:],
+            "constraints": list(state.constraints),
+            "success_criteria": list(brief["success_criteria"]),
+            "known_facts": list(state.known_facts),
+            "missing_information": list(state.missing_information),
+            "assumptions": list(state.assumptions),
+            "cognitive_synthesis": json.loads(json.dumps(synthesis, ensure_ascii=False)),
+            "world": bounded_world,
+            "completed_steps": list(state.completed_steps[-8:]),
+            "failures": list(state.failures[-5:]),
         }
-        return json.dumps(payload, ensure_ascii=False)[:7500]
+
+        def encode():
+            return json.dumps(payload, ensure_ascii=False)
+
+        while len(encode()) > 7500:
+            trimmed = False
+            for items in payload["cognitive_synthesis"].values():
+                if isinstance(items, list) and items:
+                    items.pop(0)
+                    trimmed = True
+                    break
+            if not trimmed:
+                for key in (
+                    "completed_steps", "failures", "known_facts", "missing_information",
+                    "assumptions", "constraints", "success_criteria",
+                ):
+                    if payload[key]:
+                        payload[key].pop(0)
+                        trimmed = True
+                        break
+            if not trimmed and isinstance(payload["world"], dict):
+                for key in ("events", "artifacts", "knowledge"):
+                    if payload["world"].get(key):
+                        payload["world"][key].pop(0)
+                        if key == "knowledge":
+                            payload["world"]["facts"] = [
+                                item["content"] for item in payload["world"]["knowledge"]
+                                if item.get("kind") == "fact" and item.get("status") == "source_supported"
+                            ][-12:]
+                        trimmed = True
+                        break
+                research = payload["world"].get("research")
+                if not trimmed and isinstance(research, dict):
+                    for key in ("sources", "claims", "contradictions", "queries", "missing_information"):
+                        if research.get(key):
+                            research[key].pop(0)
+                            trimmed = True
+                            break
+            if not trimmed:
+                break
+        if len(encode()) <= 7500:
+            return encode()
+        return json.dumps({
+            "goal": str(state.goal)[:800],
+            "world": json.loads(world.as_prompt(limit=1600)),
+            "context_truncated": True,
+        }, ensure_ascii=False)
 
     def _recovery_context(
         self,
@@ -452,6 +511,9 @@ class NexusBrain:
         cause,
         lessons,
     ):
+        diagnosis = str(cause).strip() if cause is not None else "Unknown cause"
+        if diagnosis.casefold().startswith("hypothesis only:"):
+            diagnosis = diagnosis[len("hypothesis only:"):].strip()
         return (
             f"Goal: {state.goal}\n"
             f"Success criteria: {json.dumps(brief.get('success_criteria', []), ensure_ascii=False)}\n"
@@ -459,7 +521,7 @@ class NexusBrain:
             f"Completed: {json.dumps(state.completed_steps[-8:], ensure_ascii=False)[:3500]}\n"
             f"Failures: {json.dumps(state.failures[-5:], ensure_ascii=False)[:2500]}\n"
             f"Latest failure: {error}\n"
-            f"Diagnosis: {cause}\n"
+            f"Root-cause hypothesis (low confidence; evaluate against the recorded evidence): {diagnosis}\n"
             f"{self.adaptation.recovery_context(state, lessons)}"
         )
 
@@ -572,6 +634,38 @@ class NexusBrain:
             result=result,
             tool_attempted=True,
         )
+
+    @staticmethod
+    def _record_diagnosis(world, state, task, cause):
+        tool = task.get("tool") if isinstance(task.get("tool"), str) else "unknown_tool"
+        step = task.get("step") if type(task.get("step")) is int else None
+        failures = getattr(state, "failures", [])
+        if not isinstance(failures, list):
+            failures = []
+        matching_failure = next((
+            item for item in reversed(failures)
+            if isinstance(item, dict) and item.get("tool") == tool and item.get("step") == step
+        ), {})
+        category = matching_failure.get("category")
+        provenance = [{
+            "type": "failure_diagnosis", "tool": tool, "step": step,
+            "category": category if isinstance(category, str) else "unknown",
+        }]
+        diagnosis = str(cause).strip()[:300] if cause is not None else ""
+        if diagnosis.casefold().startswith("hypothesis only:"):
+            diagnosis = diagnosis[len("hypothesis only:"):].strip()
+        if not diagnosis or diagnosis.casefold() == "unknown cause":
+            world.add_unknown(
+                f"Root cause for {tool} step {step or 'unknown'} remains undetermined.",
+                provenance=provenance,
+            )
+        else:
+            world.add_hypothesis(
+                f"Potential root cause for {tool} step {step or 'unknown'}: {diagnosis}",
+                confidence="low",
+                provenance=provenance,
+            )
+        state.world = world.snapshot()
 
     @staticmethod
     def _tool_failure_category(result):

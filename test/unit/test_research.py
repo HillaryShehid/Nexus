@@ -74,6 +74,7 @@ def test_synthesis_requires_verbatim_source_evidence_and_downranks_conflicts():
         }],
         "contradictions": [{
             "issue": "Sources disagree about rewriting support.",
+            "related_claim": "Pytest supports assertion rewriting.",
             "evidence": [
                 {"source_id": "S1", "excerpt": "Pytest supports assertion rewriting for test modules."},
                 {"source_id": "S2", "excerpt": "This page claims assertion rewriting is unavailable."},
@@ -88,7 +89,12 @@ def test_synthesis_requires_verbatim_source_evidence_and_downranks_conflicts():
 
     assert len(result["claims"]) == 1
     assert len(result["contradictions"]) == 1
+    assert result["contradictions"][0]["related_claim"] == "Pytest supports assertion rewriting."
     assert result["enough_evidence"] is False
+
+    raw["contradictions"][0]["related_claim"] = "Invented unrelated claim."
+    result = ResearchController._validate_synthesis(raw, sources, {"goal": "pytest"})
+    assert "related_claim" not in result["contradictions"][0]
 
     raw["claims"][0]["evidence"][0]["excerpt"] = "Invented quotation with no source support."
     result = ResearchController._validate_synthesis(raw, sources, {"goal": "pytest"})
