@@ -97,12 +97,19 @@ class ToolSystem:
 
     def tool_web_search(self, query):
         try:
-            from duckduckgo_search import DDGS
-            with DDGS() as ddgs: results = list(ddgs.text(query, max_results=3))
+            try:
+                from ddgs import DDGS
+            except ImportError:
+                # Keep existing installations usable until they install the renamed package.
+                from duckduckgo_search import DDGS
+            with DDGS() as ddgs: results = list(ddgs.text(query, max_results=3, backend="auto"))
             cleaned = []
             for item in results:
                 if isinstance(item, dict) and all(isinstance(item.get(k), str) for k in ("title", "href", "body")) and item["title"].strip() and item["href"].strip():
                     cleaned.append({"title": item["title"][:250], "url": item["href"][:500], "snippet": item["body"][:650]})
+            if not cleaned:
+                logger.warning("Search provider returned no usable results for query.")
+                return {"success": False, "result": "", "error": "Search Provider Error: No search results were returned."}
             payload = {"query": query, "results": cleaned[:3]}
             encoded = json.dumps(payload, ensure_ascii=False)
             while len(encoded) > MAX_SEARCH_OUTPUT and payload["results"]:
