@@ -11,12 +11,20 @@ class PermissionSystem:
 
     def __init__(self, authorization=None, actor_id=None):
         self.authorization = authorization or Authorization()
-        self.actor_id = actor_id
+        self.actor_id = None
+        if actor_id is not None:
+            self.set_actor(actor_id)
+
 
     def set_actor(self, actor_id):
-        if actor_id is not None and self.authorization.get_user(actor_id) is None:
+        if actor_id is None:
+            # Never create an implicit anonymous actor: tool authorization must
+            # fail closed when Nexus has no authenticated owner context.
+            self.actor_id = None
+            return
+        if self.authorization.get_user(actor_id) is None:
             raise ValueError("Unknown Nexus user.")
-        self.actor_id = actor_id
+        self.actor_id = str(actor_id)
 
     def evaluate_clearance(self, tool_name: str, args: dict, actor_id=None) -> dict:
         actor_id = self.actor_id if actor_id is None else actor_id
@@ -26,12 +34,14 @@ class PermissionSystem:
         if not isinstance(args, dict):
             return {"status": "blocked", "reason": "Invalid argument structure."}
 
-        if actor_id is not None:
-            actor = self.authorization.get_user(actor_id)
-            if actor is None or not actor.active:
-                return {"status": "blocked", "reason": "Unknown or inactive user."}
-            if not self.authorization.can(actor_id, tool_name):
-                return {"status": "blocked", "reason": "Owner authorization is required for this action."}
+        if actor_id is None:
+            return {"status": "blocked", "reason": "Authenticated owner context is required."}
+
+        actor = self.authorization.get_user(actor_id)
+        if actor is None or not actor.active:
+            return {"status": "blocked", "reason": "Unknown or inactive user."}
+        if not self.authorization.can(actor_id, tool_name):
+            return {"status": "blocked", "reason": "Owner authorization is required for this action."}
 
         allowed_actions = spec["limits"].get("action")
         if allowed_actions is not None and "action" in args and args["action"] not in allowed_actions:
