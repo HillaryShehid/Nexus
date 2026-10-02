@@ -51,4 +51,4 @@ def cors_headers(origin: object, configured_origins: object) -> dict[str, str]:
     normalized = _normalize_origin(origin)
     if normalized is None or normalized not in parse_allowed_origins(configured_origins):
         return {}
-    return {"Access-Control-Allow-Origin": origin, "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Authorization, Content-Type", "Vary": "Origin"},
+    return {"Access-Control-Allow-Origin": origin, "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Authorization, Content-Type", "Vary": "Origin"}
