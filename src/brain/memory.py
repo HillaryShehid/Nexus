@@ -37,6 +37,9 @@ class CognitiveMemory:
             },
             ensure_ascii=False,
         )
+        append = getattr(self.store, "append_conversation", None)
+        if callable(append):
+            return append(payload)
         return self.store.save("chat_context", payload)
 
     def read_fact(self, key):
