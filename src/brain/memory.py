@@ -11,7 +11,33 @@ class CognitiveMemory:
         self.store = store or LocalMemoryStore(tools)
 
     def read_context(self):
-        return "No persisted conversation context is loaded."
+        raw = self.store.get("chat_context")
+        try:
+            history = json.loads(raw)
+        except (TypeError, json.JSONDecodeError):
+            return "No persisted conversation context is loaded."
+        if not isinstance(history, list) or not history:
+            return "No persisted conversation context is loaded."
+        # Keep the model prompt bounded while retaining the full conversation log.
+        recent = history[-20:]
+        lines = []
+        for item in recent:
+            if isinstance(item, dict):
+                user = str(item.get("user", ""))[:4000]
+                assistant = str(item.get("assistant", ""))[:6000]
+                lines.append(f"User: {user}\nNexus: {assistant}")
+        return "\n\n".join(lines) if lines else "No persisted conversation context is loaded."
+
+    def save_conversation(self, user_message, assistant_message):
+        payload = json.dumps(
+            {
+                "user": str(user_message)[:8000],
+                "assistant": str(assistant_message)[:12000],
+                "saved_at": datetime.now(timezone.utc).isoformat(),
+            },
+            ensure_ascii=False,
+        )
+        return self.store.save("chat_context", payload)
 
     def read_fact(self, key):
         return str(self.store.get(key[:80]))[:1500]
