@@ -2,19 +2,22 @@ from src.access import Authorization, DEFAULT_USERS, Role
 from src.storage import MemoryStore, TaskStore
 
 
-def test_default_team_roles_are_centralized():
+def test_personal_owner_identity_is_centralized():
+    assert set(DEFAULT_USERS) == {"hilal"}
     assert DEFAULT_USERS["hilal"].role is Role.OWNER
-    assert DEFAULT_USERS["hamza"].role is Role.WORKER
-    assert DEFAULT_USERS["talha"].role is Role.WORKER
-    assert DEFAULT_USERS["zachariah"].role is Role.WORKER
-    assert DEFAULT_USERS["mustafa"].role is Role.WORKER
+    assert Authorization().can("hilal", "read_memory")
 
 
-def test_authorization_centralizes_high_impact_actions():
+def test_unknown_users_cannot_act():
     auth = Authorization()
-    assert auth.can("hilal", "purchase_domain")
-    assert not auth.can("hamza", "purchase_domain")
-    assert auth.can("hamza", "research_company")
+    assert not auth.can("someone_else", "read_memory")
+    assert auth.describe("someone_else")["authenticated"] is False
+
+
+def test_owner_controls_high_impact_actions():
+    auth = Authorization()
+    assert auth.can("hilal", "spend_money")
+    assert auth.can("hilal", "self_modify_foundation")
 
 
 def test_storage_interfaces_are_explicit():
