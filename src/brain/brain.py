@@ -735,6 +735,13 @@ class NexusBrain:
                     ),
                 }
 
+        # Persist the user-visible exchange. The log has no artificial chat-count
+        # limit; only the prompt context is windowed when recalled.
+        try:
+            self.memory.save_conversation(state.request, answer)
+        except Exception as exc:
+            logger.warning("Conversation persistence unavailable (%s).", type(exc).__name__)
+
         return {
             "response": answer,
             "status": state.status,
