@@ -91,3 +91,14 @@ def test_memory_store_rejects_symlink_without_reading_or_overwriting_target(real
     assert not os.path.islink(real_tools.memory_file)
     with open(target, "r", encoding="utf-8") as handle:
         assert json.load(handle) == original
+
+
+def test_corrupt_memory_store_is_not_overwritten(real_tools):
+    original = "{not valid json"
+    with open(real_tools.memory_file, "w", encoding="utf-8") as handle:
+        handle.write(original)
+
+    result = real_tools.execute("memory_store", {"action": "save", "key": "safe", "value": "local"})
+    assert result["success"] is False
+    with open(real_tools.memory_file, "r", encoding="utf-8") as handle:
+        assert handle.read() == original
