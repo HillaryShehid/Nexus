@@ -17,6 +17,13 @@ class LocalMemoryStore(MemoryStore):
         )
         return result.get("success") is True
 
+    def append_conversation(self, value):
+        result = self.tools.execute(
+            "memory_store",
+            {"action": "append_conversation", "key": "chat_context", "value": str(value)[:20000]},
+        )
+        return result.get("success") is True
+
     def search(self, query):
         # The current local store has key lookup rather than full text search.
         # Keep the interface stable while durable/searchable storage is added.

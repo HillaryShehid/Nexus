@@ -33,7 +33,7 @@ _MANIFEST = {
     "memory_store": {
         "required_args": ["action", "key"],
         "types": {"action": str, "key": str, "value": str},
-        "limits": {"action": ["read", "save"], "key": 40, "value": 1500},
+        "limits": {"action": ["read", "save", "append_conversation"], "key": 40, "value": 20000},
         "policy": "LOW_RISK",
     },
     "code_tester": {

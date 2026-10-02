@@ -39,3 +39,21 @@ def test_prompt_context_uses_recent_window_without_deleting_history():
     assert "hello 10" in context
     assert "hello 9" not in context
     assert len(json.loads(store.values["chat_context"])) == 30
+
+
+def test_real_local_memory_store_does_not_truncate_history():
+    from src.brain.local_memory_store import LocalMemoryStore
+    from src.tools import ToolSystem
+
+    tools = ToolSystem()
+    tools.memory_file = str(__import__("pathlib").Path(tools.workspace_root) / "test-chat-memory.json")
+    store = LocalMemoryStore(tools)
+    memory = CognitiveMemory(tools=tools, store=store)
+
+    for index in range(40):
+        assert memory.save_conversation("u" * 100 + str(index), "a" * 200 + str(index))
+
+    history = json.loads(store.get("chat_context"))
+    assert len(history) == 40
+    assert history[0]["user"].startswith("u" * 100)
+    assert history[-1]["assistant"].endswith("39")

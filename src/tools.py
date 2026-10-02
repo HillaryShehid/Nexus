@@ -280,7 +280,12 @@ class ToolSystem:
         if action == "read":
             if key == "chat_context": return {"success": True, "result": json.dumps(data["conversations"], ensure_ascii=False), "error": None}
             return {"success": True, "result": str(data["facts"].get(key, "No matching memory record found."))[:1500], "error": None}
-        if key == "chat_context": data["conversations"].append(value)
+        if action == "append_conversation":
+            if key != "chat_context":
+                return {"success": False, "result": "", "error": "Memory Error: Invalid conversation key."}
+            data["conversations"].append(value)
+        elif key == "chat_context":
+            return {"success": False, "result": "", "error": "Memory Error: Use append_conversation for chat history."}
         else:
             if len(data["facts"]) >= 30 and key not in data["facts"]: return {"success": False, "result": "", "error": "Storage Overflow Error: Memory limit reached."}
             data["facts"][key] = value
