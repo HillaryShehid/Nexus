@@ -49,8 +49,8 @@ async function sendMessage(text) {
     if (speakResponses) speak(data.response || '');
   } catch (error) {
     pending.lastChild.textContent = error.message === 'Unauthorized'
-      ? 'Nexus is private. Sign in through the Cloudflare Access-protected site.'
-      : 'I could not reach the Nexus brain. Check the backend connection.';
+      ? 'Nexus is private. Check the local access settings.'
+      : 'I could not reach the Nexus brain. Check the local backend connection.';
     console.error(error);
   }
 }
