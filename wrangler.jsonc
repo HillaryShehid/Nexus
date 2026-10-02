@@ -6,6 +6,7 @@
   "compatibility_flags": ["python_workers", "disable_python_external_sdk"],
   "workers_dev": true,
   "vars": {
-    "NEXUS_MODEL": "gpt-5.6-luna"
+    "NEXUS_MODEL": "gpt-5.6-luna",
+    "NEXUS_ALLOWED_ORIGINS": ""
   }
 }
