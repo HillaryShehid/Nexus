@@ -73,7 +73,7 @@ class TaskManager:
             except OSError: pass
             raise
 
-    def create(self, goal, priority="normal", created_by=None, assigned_to=None, requires_approval=False):
+    def create(self, goal, priority="normal", created_by=None, requires_approval=False):
         if not isinstance(goal, str) or not goal.strip():
             raise ValueError("Task goal must be non-empty text.")
         if not isinstance(priority, str) or priority not in self.PRIORITIES:
@@ -82,7 +82,7 @@ class TaskManager:
         task = {
             "id": uuid4().hex, "goal": goal.strip()[:800], "priority": priority,
             "status": "queued", "created_at": now, "updated_at": now,
-            "created_by": str(created_by or "")[:100], "assigned_to": str(assigned_to or "")[:100],
+            "created_by": str(created_by or "")[:100],
             "progress": "0", "checkpoint": "", "result": "", "error": "", "attempts": "0",
             "requires_approval": "true" if requires_approval else "false",
             "approval_status": "pending" if requires_approval else "not_required",
