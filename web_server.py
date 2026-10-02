@@ -1,4 +1,4 @@
-"Development API for the personal Nexus brain.
+"""Development API for the personal Nexus brain.
 
 Production hosting is separate from this development server. Cloudflare Pages
 uses the /functions proxy in this repository to reach the deployed brain.
