@@ -1,24 +1,56 @@
-# Test Nexus in a browser
+# Cloudflare test site for personal Nexus
 
-This is the first browser interface for the **personal** Nexus brain. It intentionally contains no business/CRM features and does not add Cloudflare.
+This is the personal-only Nexus browser interface. It is designed for Cloudflare Pages while the Python Nexus brain remains behind a private API.
 
-## Start
+## Architecture
 
-1. Install the project:
-   `python -m pip install -e ".[dev]"`
-2. Set `OPENAI_API_KEY` and `NEXUS_MODEL` in your local `.env`.
-3. Run:
-   `python web_server.py`
-4. Open **http://127.0.0.1:8787**.
+Browser -> Cloudflare Pages -> Pages Functions /api/* -> private HTTPS -> Nexus Python API -> NexusCore / NexusBrain
 
-The browser talks to the real `NexusCore` instance through `/api/chat`; it is not a fake/demo response layer.
+Cloudflare Pages supports static HTML and Pages Functions. The Functions in this project proxy /api/chat and /api/health to the protected Python API.
+
+## Cloudflare setup
+
+Use these Pages settings:
+- Production branch: main
+- Build command: exit 0
+- Build output directory: web
+
+Pages Functions live in the root functions/ directory.
+
+Add these in Workers & Pages -> your project -> Settings -> Variables and Secrets:
+- NEXUS_API_URL: HTTPS base URL of the server running the Nexus Python API.
+- NEXUS_API_TOKEN: a long random secret shared only between Cloudflare Pages Functions and the Nexus API.
+
+Store NEXUS_API_TOKEN as an encrypted Secret. Do not put it in web/app.js or another browser-visible file.
+
+## Protect the site
+
+Because this is your personal Nexus, protect the Pages site with Cloudflare Access. That keeps random visitors from using the personal AI endpoint.
+
+## Nexus API server
+
+The Python API must be reachable over HTTPS by Cloudflare. Configure the same NEXUS_API_TOKEN on that server.
+
+When the token is set, web_server.py requires the Authorization header with the matching Bearer token. When the token is unset, the local development server remains usable without authentication.
+
+Do not expose the Python API publicly without an authentication boundary.
 
 ## Voice
 
-The browser UI includes experimental microphone input and spoken-response controls using the browser's Web Speech APIs. This is a UI-level voice bridge, not yet the full always-ready Nexus voice system from the master vision.
+The website includes:
+- microphone voice input
+- spoken Nexus responses
+- optional read-aloud mode
+- responsive mobile UI
 
-The existing `src/personal_runtime.py` voice foundation remains responsible for the Nexus-side voice concepts (speaker/private/silent modes, wake-word state, and routing contracts). Actual microphone, speech-recognition, TTS hardware, wake-word detection, and AirPods routing are not falsely claimed as implemented.
+This is the first testable browser voice bridge, not yet the full always-ready Nexus voice system. Wake-word detection, continuous listening, interruption handling, real AirPods routing, and dedicated local speech hardware remain future voice work.
 
-## Security
+## Deployment note
 
-The development server binds to `127.0.0.1` only. Do not expose it directly to the public internet. A real deployed service needs authentication, HTTPS, rate limits, and a production server boundary before remote access.
+Cloudflare currently supports static HTML on Pages. Pages Functions require deployment through Git integration or Wrangler; dashboard Direct Upload does not support Functions.
+
+## Current scope
+
+Included: personal Nexus chat, browser voice, protected API proxy, real Nexus Python brain connection.
+
+Not included: business/CRM features, sales/calling systems, business website builder, payments, or business automation.
