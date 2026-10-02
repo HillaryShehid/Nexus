@@ -57,3 +57,21 @@ def test_real_local_memory_store_does_not_truncate_history():
     assert len(history) == 40
     assert history[0]["user"].startswith("u" * 100)
     assert history[-1]["assistant"].endswith("39")
+
+
+def test_generic_store_fallback_appends_history():
+    class GenericStore:
+        def __init__(self):
+            self.values = {}
+        def get(self, key):
+            return self.values.get(key, "")
+        def save(self, key, value):
+            self.values[key] = value
+            return True
+
+    memory = CognitiveMemory(tools=None, store=GenericStore())
+    for index in range(25):
+        assert memory.save_conversation(f"user {index}", f"reply {index}") is True
+    history = json.loads(memory.store.values["chat_context"])
+    assert len(history) == 25
+    assert json.loads(history[-1])["user"] == "user 24"
