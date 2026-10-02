@@ -4,6 +4,7 @@ from src.personal_runtime import (
     OwnerControl,
     PersonalNexusRuntime,
     VoiceMode,
+    VisionPolicy,
 )
 from src.voice_interface import VoiceController
 from src.vision_interface import VisionController, VisionObservation
