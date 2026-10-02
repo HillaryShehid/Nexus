@@ -56,3 +56,12 @@ def test_personal_runtime_has_no_business_roles():
     runtime = PersonalNexusRuntime()
     assert sorted(runtime.roles) == ["personal", "research"]
     assert runtime.status()["unlimited_conversations"] is True
+
+
+def test_phone_interface_supports_notifications_and_2fa():
+    from src.phone_interface import PhoneInterface
+    phone = PhoneInterface()
+    phone.connect()
+    event = phone.prepare_notification(Notification("Nexus", "Ready"))
+    assert event.kind == "notification"
+    assert phone.request_second_factor("approval-1").payload["request_id"] == "approval-1"
