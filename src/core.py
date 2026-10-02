@@ -5,6 +5,7 @@ from src.brain.health import NexusHealth
 from src.brain.task_manager import TaskManager
 from src.learning import LearningSystem
 from src.model import AIBrain
+from src.access import Authorization
 from src.permissions import PermissionSystem
 from src.planner import Planner
 from src.tools import ToolSystem
@@ -17,13 +18,14 @@ MAX_USER_INPUT = 8000
 class NexusCore:
     """Application shell for the Nexus brain and persistent task system."""
 
-    def __init__(self):
+    def __init__(self, actor_id="hilal"):
         self.brain_model = AIBrain()
         self.tools = ToolSystem()
         self.planner = Planner(self.brain_model)
         self.verifier = VerificationSystem(self.brain_model, self.tools)
         self.learning = LearningSystem()
-        self.permissions = PermissionSystem()
+        self.authorization = Authorization()
+        self.permissions = PermissionSystem(self.authorization, actor_id=actor_id)
         self.tasks = TaskManager()
         self.health = NexusHealth()
         self.brain = NexusBrain(
@@ -43,6 +45,10 @@ class NexusCore:
 
     def self_improvement_review(self):
         return self.brain.self_improvement_review()
+
+    def authenticate(self, actor_id):
+        self.permissions.set_actor(actor_id)
+        return self.authorization.describe(actor_id)
 
     def handle_request(self, user_input):
         if not isinstance(user_input, str):
