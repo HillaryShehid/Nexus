@@ -26,7 +26,7 @@ class MemoryStore(ABC):
             history = []
         if not isinstance(history, list):
             history = []
-        history.append(str(value))
+        history.append(value)
         return self.save("chat_context", json.dumps(history, ensure_ascii=False))
 
     @abstractmethod
