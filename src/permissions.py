@@ -9,10 +9,17 @@ logger = logging.getLogger("nexus.permissions")
 class PermissionSystem:
     """Deterministic tool-policy gate with optional user/role authorization."""
 
-    def __init__(self, authorization=None):
+    def __init__(self, authorization=None, actor_id=None):
         self.authorization = authorization or Authorization()
+        self.actor_id = actor_id
+
+    def set_actor(self, actor_id):
+        if actor_id is not None and self.authorization.get_user(actor_id) is None:
+            raise ValueError("Unknown Nexus user.")
+        self.actor_id = actor_id
 
     def evaluate_clearance(self, tool_name: str, args: dict, actor_id=None) -> dict:
+        actor_id = self.actor_id if actor_id is None else actor_id
         spec = SHARED_REGISTRY.get(tool_name)
         if spec is None:
             return {"status": "blocked", "reason": "Unknown tool."}
