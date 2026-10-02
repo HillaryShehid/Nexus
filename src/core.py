@@ -10,6 +10,8 @@ from src.permissions import PermissionSystem
 from src.planner import Planner
 from src.tools import ToolSystem
 from src.verification import VerificationSystem
+from src.personal_runtime import PersonalNexusRuntime
+from src.notifications import NotificationCenter
 
 logger = logging.getLogger("nexus.core")
 MAX_USER_INPUT = 8000
@@ -28,6 +30,8 @@ class NexusCore:
         self.permissions = PermissionSystem(self.authorization, actor_id=actor_id)
         self.tasks = TaskManager()
         self.health = NexusHealth()
+        self.personal = PersonalNexusRuntime(owner_id=actor_id)
+        self.notifications = NotificationCenter()
         self.brain = NexusBrain(
             model=self.brain_model,
             tools=self.tools,
