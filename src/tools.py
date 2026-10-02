@@ -13,6 +13,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 from urllib.parse import urljoin, urlsplit
 
 from src.registry import SHARED_REGISTRY, WORKSPACE_DIR
@@ -32,6 +33,7 @@ class ToolSystem:
         self.allowed_operators = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv, ast.Pow: operator.pow, ast.USub: operator.neg, ast.UAdd: operator.pos}
         self.allowed_nodes = (ast.Expression, ast.Constant, ast.BinOp, ast.UnaryOp, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.USub, ast.UAdd)
         self.dispatch_table = {"web_search": self.tool_web_search, "read_page": self.tool_read_page, "calculator": self.tool_calculator, "file_system": self.tool_file_system, "memory_store": self.tool_memory_store, "code_tester": self.tool_code_tester}
+        self._memory_lock = threading.RLock()
 
     def _validate_args(self, tool_name, args):
         spec = SHARED_REGISTRY.get(tool_name)
@@ -282,24 +284,47 @@ class ToolSystem:
             raise
 
     def tool_memory_store(self, action, key, value=""):
-        data = self._load_memory()
-        if action == "read":
-            if key == "chat_context": return {"success": True, "result": json.dumps(data["conversations"], ensure_ascii=False), "error": None}
-            return {"success": True, "result": str(data["facts"].get(key, "No matching memory record found."))[:1500], "error": None}
-        if action == "append_conversation":
-            if key != "chat_context":
-                return {"success": False, "result": "", "error": "Memory Error: Invalid conversation key."}
-            data["conversations"].append(value)
-        elif key == "chat_context":
-            return {"success": False, "result": "", "error": "Memory Error: Use append_conversation for chat history."}
-        else:
-            if len(data["facts"]) >= 30 and key not in data["facts"]: return {"success": False, "result": "", "error": "Storage Overflow Error: Memory limit reached."}
-            data["facts"][key] = value
-        try:
-            self._save_memory(data); return {"success": True, "result": "Memory entry stored successfully.", "error": None}
-        except OSError:
-            logger.exception("Memory persistence failure.")
-            return {"success": False, "result": "", "error": "Memory Error: Unable to persist memory."}
+        """Read/update memory atomically within this process."""
+        with self._memory_lock:
+            data = self._load_memory()
+            if action == "read":
+                if key == "chat_context":
+                    normalized = []
+                    for item in data["conversations"]:
+                        if isinstance(item, dict):
+                            normalized.append(item)
+                        elif isinstance(item, str):
+                            try:
+                                decoded = json.loads(item)
+                            except (TypeError, json.JSONDecodeError):
+                                decoded = None
+                            normalized.append(decoded if isinstance(decoded, dict) else item)
+                        else:
+                            normalized.append(str(item))
+                    return {"success": True, "result": json.dumps(normalized, ensure_ascii=False), "error": None}
+                return {"success": True, "result": str(data["facts"].get(key, "No matching memory record found."))[:1500], "error": None}
+            if action == "append_conversation":
+                if key != "chat_context":
+                    return {"success": False, "result": "", "error": "Memory Error: Invalid conversation key."}
+                try:
+                    decoded = json.loads(value)
+                except (TypeError, json.JSONDecodeError):
+                    decoded = value
+                if not isinstance(decoded, (dict, str)):
+                    return {"success": False, "result": "", "error": "Memory Error: Invalid conversation entry."}
+                data["conversations"].append(decoded)
+            elif key == "chat_context":
+                return {"success": False, "result": "", "error": "Memory Error: Use append_conversation for chat history."}
+            else:
+                if len(data["facts"]) >= 30 and key not in data["facts"]:
+                    return {"success": False, "result": "", "error": "Storage Overflow Error: Memory limit reached."}
+                data["facts"][key] = value
+            try:
+                self._save_memory(data)
+                return {"success": True, "result": "Memory entry stored successfully.", "error": None}
+            except OSError:
+                logger.exception("Memory persistence failure.")
+                return {"success": False, "result": "", "error": "Memory Error: Unable to persist memory."}
 
     def _terminate_process(self, process):
         if process.poll() is not None: return

@@ -16,8 +16,7 @@ Understand → Identify knowledge gaps → Research → Assess evidence → Upda
 - 🧮 Calculator, safe web retrieval, workspace filesystem access, memory storage, and an isolated code-test runner.
 - 🧬 Bounded self-improvement proposals that remain owner-controlled before promotion.
 - 🔐 Centralized owner identity and fail-closed authorization.
-- ☁️ A secured Cloudflare API boundary.
-
+- 
 ## Unlimited chat
 
 Nexus has **no artificial chat-count quota**. The conversation log is not truncated to a fixed number of chats.
@@ -53,8 +52,6 @@ storage checkpoints permissions
                  |
             owner identity
 ```
-
-The Cloudflare Worker is an API/deployment boundary. It is secured with bearer authentication, request-size validation, and explicit CORS origins. It should remain thin rather than becoming a second Nexus brain.
 
 ## Memory and tasks
 
