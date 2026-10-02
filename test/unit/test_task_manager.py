@@ -26,7 +26,7 @@ def test_task_lifecycle_is_bounded_and_metadata_cannot_replace_identity():
 
 def test_task_checkpoints_are_resumable():
     manager = TaskManager()
-    task = manager.create("build website", created_by="hilal", assigned_to="hamza")
+    task = manager.create("prepare a study plan", created_by="hilal")
     checkpointed = manager.checkpoint(task["id"], 42, "completed research; waiting for build")
 
     assert checkpointed["status"] == "running"
@@ -37,7 +37,7 @@ def test_task_checkpoints_are_resumable():
 
 def test_approval_tasks_have_explicit_approval_state():
     manager = TaskManager()
-    task = manager.create("purchase domain", created_by="hilal", requires_approval=True)
+    task = manager.create("change an important setting", created_by="hilal", requires_approval=True)
     assert task["requires_approval"] == "true"
     assert task["approval_status"] == "pending"
     waiting = manager.update(task["id"], "waiting_for_approval")
