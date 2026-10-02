@@ -26,6 +26,8 @@ class TaskManager:
         self.path = os.path.abspath(os.path.join(WORKSPACE_DIR, "nexus_tasks.json"))
 
     def _load(self):
+        if os.path.lexists(self.path) and os.path.islink(self.path):
+            raise ValueError("Task store must be a regular, non-symlink file.")
         if not os.path.exists(self.path):
             return []
         if os.path.islink(self.path) or not os.path.isfile(self.path):
