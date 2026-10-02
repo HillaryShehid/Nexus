@@ -74,4 +74,4 @@ def test_generic_store_fallback_appends_history():
         assert memory.save_conversation(f"user {index}", f"reply {index}") is True
     history = json.loads(memory.store.values["chat_context"])
     assert len(history) == 25
-    assert json.loads(history[-1])["user"] == "user 24"
+    assert history[-1]["user"] == "user 24"
