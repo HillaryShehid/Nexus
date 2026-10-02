@@ -1,9 +1,12 @@
-"""Local browser interface for the personal Nexus brain.
+"Development API for the personal Nexus brain.
 
-Binds only to 127.0.0.1 so the development API is not exposed to the network.
+Production hosting is separate from this development server. Cloudflare Pages
+uses the /functions proxy in this repository to reach the deployed brain.
 """
+
 import json
 import logging
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -14,6 +17,7 @@ HOST = "127.0.0.1"
 PORT = 8787
 WEB_ROOT = Path(__file__).parent / "web"
 MAX_BODY = 16_000
+NEXUS_API_TOKEN = os.getenv("NEXUS_API_TOKEN", "")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -29,9 +33,17 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _authorized(self):
+        if not NEXUS_API_TOKEN:
+            return True
+        return self.headers.get("Authorization") == "Bearer " + NEXUS_API_TOKEN
+
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/api/health":
+            if not self._authorized():
+                self._json(401, {"error": "Unauthorized"})
+                return
             try:
                 if self.nexus is None:
                     self.nexus = NexusCore(actor_id="hilal")
@@ -49,8 +61,15 @@ class Handler(BaseHTTPRequestHandler):
         if not file_path.is_file():
             self._json(404, {"error": "Not found"})
             return
+
         data = file_path.read_bytes()
-        content_type = "text/html; charset=utf-8" if file_path.suffix == ".html" else "text/css; charset=utf-8" if file_path.suffix == ".css" else "application/javascript; charset=utf-8"
+        content_type = (
+            "text/html; charset=utf-8"
+            if file_path.suffix == ".html"
+            else "text/css; charset=utf-8"
+            if file_path.suffix == ".css"
+            else "application/javascript; charset=utf-8"
+        )
         self.send_response(200)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(data)))
@@ -61,6 +80,10 @@ class Handler(BaseHTTPRequestHandler):
         if urlparse(self.path).path != "/api/chat":
             self._json(404, {"error": "Not found"})
             return
+        if not self._authorized():
+            self._json(401, {"error": "Unauthorized"})
+            return
+
         try:
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
@@ -69,6 +92,7 @@ class Handler(BaseHTTPRequestHandler):
         if length <= 0 or length > MAX_BODY:
             self._json(413, {"error": "Request body too large"})
             return
+
         try:
             payload = json.loads(self.rfile.read(length))
             message = payload.get("message")
@@ -91,6 +115,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print(f"🧠 Nexus web interface: http://{HOST}:{PORT}")
+    print(f"🧠 Nexus development interface: http://{HOST}:{PORT}")
     print("Voice input/output uses browser speech APIs when supported.")
     ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
