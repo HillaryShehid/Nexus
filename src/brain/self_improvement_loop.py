@@ -340,7 +340,7 @@ class SelfImprovementLoop:
             self._save(journal)
 
     def _load(self):
-        if self.workspace.is_symlink() or self.path.is_symlink():
+        if self.workspace.is_symlink() or os.path.islink(self.path):
             raise ValueError("Improvement journal path must not be a symlink.")
         if not self.path.exists():
             return {"schema_version": self.SCHEMA_VERSION, "completed_keys": [], "cycles": []}

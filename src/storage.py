@@ -4,6 +4,7 @@ The default implementations remain local and development-friendly. The
 interfaces allow D1/SQLite/Postgres/other durable stores to be added later
 without changing the brain's public behavior.
 """
+import json
 from abc import ABC, abstractmethod
 
 
@@ -15,6 +16,18 @@ class MemoryStore(ABC):
     @abstractmethod
     def save(self, key, value):
         raise NotImplementedError
+
+    def append_conversation(self, value):
+        """Append one serialized conversation entry using the generic store API."""
+        raw = self.get("chat_context")
+        try:
+            history = json.loads(raw) if raw else []
+        except (TypeError, json.JSONDecodeError):
+            history = []
+        if not isinstance(history, list):
+            history = []
+        history.append(value)
+        return self.save("chat_context", json.dumps(history, ensure_ascii=False))
 
     @abstractmethod
     def search(self, query):

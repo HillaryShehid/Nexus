@@ -109,3 +109,14 @@ def test_task_store_symlink_is_rejected(tmp_path):
 
     with pytest.raises(ValueError, match="symlink"):
         manager.active()
+
+
+def test_broken_task_store_symlink_fails_closed():
+    manager = TaskManager()
+    target = os.path.join(os.path.dirname(manager.path), "missing-task-target.json")
+    try:
+        os.symlink(target, manager.path)
+    except (OSError, NotImplementedError):
+        pytest.skip("Symlink creation is unavailable on this platform.")
+    with pytest.raises(ValueError, match="symlink"):
+        manager.active()

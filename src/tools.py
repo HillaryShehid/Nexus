@@ -257,12 +257,18 @@ class ToolSystem:
             return {"success": False, "result": "", "error": "Storage Error: Filesystem operation failed."}
 
     def _load_memory(self):
-        if not os.path.exists(self.memory_file) or os.path.islink(self.memory_file): return {"conversations": [], "facts": {}}
+        if os.path.lexists(self.memory_file) and os.path.islink(self.memory_file):
+            logger.warning("Memory file is a symlink; refusing to read it.")
+            return {"conversations": [], "facts": {}}
+        if not os.path.exists(self.memory_file):
+            return {"conversations": [], "facts": {}}
         try:
             with open(self.memory_file, "r", encoding="utf-8") as handle: loaded = json.load(handle)
             if isinstance(loaded, dict) and isinstance(loaded.get("conversations"), list) and isinstance(loaded.get("facts"), dict): return loaded
-        except (OSError, UnicodeError, json.JSONDecodeError): logger.warning("Memory file could not be read; resetting in-memory state.")
-        return {"conversations": [], "facts": {}}
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            logger.warning("Memory file could not be read safely.")
+            raise ValueError("Memory store is unreadable; refusing to overwrite it.") from exc
+        raise ValueError("Memory store has an invalid schema; refusing to overwrite it.")
 
     def _save_memory(self, data):
         parent = os.path.dirname(self.memory_file); os.makedirs(parent, exist_ok=True)

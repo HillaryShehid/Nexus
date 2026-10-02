@@ -29,18 +29,23 @@ class CognitiveMemory:
         return "\n\n".join(lines) if lines else "No persisted conversation context is loaded."
 
     def save_conversation(self, user_message, assistant_message):
-        payload = json.dumps(
-            {
-                "user": str(user_message)[:8000],
-                "assistant": str(assistant_message)[:12000],
-                "saved_at": datetime.now(timezone.utc).isoformat(),
-            },
-            ensure_ascii=False,
-        )
+        payload = {
+            "user": str(user_message)[:8000],
+            "assistant": str(assistant_message)[:12000],
+            "saved_at": datetime.now(timezone.utc).isoformat(),
+        }
         append = getattr(self.store, "append_conversation", None)
         if callable(append):
             return append(payload)
-        return self.store.save("chat_context", payload)
+        raw = self.store.get("chat_context")
+        try:
+            history = json.loads(raw) if raw else []
+        except (TypeError, json.JSONDecodeError):
+            history = []
+        if not isinstance(history, list):
+            history = []
+        history.append(payload)
+        return self.store.save("chat_context", json.dumps(history, ensure_ascii=False))
 
     def read_fact(self, key):
         return str(self.store.get(key[:80]))[:1500]
