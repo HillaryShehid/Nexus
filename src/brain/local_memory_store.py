@@ -20,7 +20,7 @@ class LocalMemoryStore(MemoryStore):
     def append_conversation(self, value):
         result = self.tools.execute(
             "memory_store",
-            {"action": "append_conversation", "key": "chat_context", "value": str(value)[:20000]},
+            {"action": "append_conversation", "key": "chat_context", "value": str(value)[:24000]},
         )
         return result.get("success") is True
 
