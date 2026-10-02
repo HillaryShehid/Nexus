@@ -13,8 +13,8 @@ from urllib.parse import urlparse
 
 from src.core import NexusCore
 
-HOST = "127.0.0.1"
-PORT = 8787
+HOST = os.getenv("HOST", "127.0.0.1")
+PORT = int(os.getenv("PORT", "8787"))
 WEB_ROOT = Path(__file__).parent / "web"
 MAX_BODY = 16_000
 NEXUS_API_TOKEN = os.getenv("NEXUS_API_TOKEN", "")

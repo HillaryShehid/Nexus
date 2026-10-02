@@ -4,7 +4,7 @@ This is the personal-only Nexus browser interface. It is designed for Cloudflare
 
 ## Architecture
 
-Browser -> Cloudflare Pages -> Pages Functions /api/* -> private HTTPS -> Nexus Python API -> NexusCore / NexusBrain
+Browser -> Cloudflare Pages -> Pages Functions /api/* -> Cloudflare Worker -> NexusBrainContainer -> NexusCore / NexusBrain
 
 Cloudflare Pages supports static HTML and Pages Functions. The Functions in this project proxy /api/chat and /api/health to the protected Python API.
 
@@ -29,11 +29,11 @@ Because this is your personal Nexus, protect the Pages site with Cloudflare Acce
 
 ## Nexus API server
 
-The Python API must be reachable over HTTPS by Cloudflare. Configure the same NEXUS_API_TOKEN on that server.
+The Python API is packaged into the Cloudflare Container under brain/. The container listens on 0.0.0.0:8080 and requires the same NEXUS_API_TOKEN sent by the Pages Function.
 
-When the token is set, web_server.py requires the Authorization header with the matching Bearer token. When the token is unset, the local development server remains usable without authentication.
+Cloudflare Containers are a Workers Paid feature. Configure the brain Worker from the brain/ directory using Workers Builds, then set its OPENAI_API_KEY, NEXUS_MODEL, and NEXUS_API_TOKEN secrets.
 
-Do not expose the Python API publicly without an authentication boundary.
+Set the Pages project's NEXUS_API_URL to the deployed brain Worker's workers.dev URL. Do not expose the Python API as a separate public server.
 
 ## Voice
 
@@ -47,7 +47,7 @@ This is the first testable browser voice bridge, not yet the full always-ready N
 
 ## Deployment note
 
-Cloudflare currently supports static HTML on Pages. Pages Functions require deployment through Git integration or Wrangler; dashboard Direct Upload does not support Functions.
+Cloudflare Pages hosts the browser UI and Pages Functions. The personal Python brain is deployed separately as a Cloudflare Container Worker because the existing brain uses a full Python/Linux runtime.
 
 ## Current scope
 
