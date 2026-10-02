@@ -1,56 +1,73 @@
-# Nexus v1.4.1 — Adaptive Brain
+# Nexus v1.5.0 — Personal AI Assistant
 
-Nexus v1.4.1 upgrades the executive brain on top of the protected v0.1.2 foundation.
+Nexus is currently **personal-first**. Business/CRM/sales/client workflows are intentionally out of scope for this phase so the core assistant can become deeper and more reliable first.
 
 ## Cognitive loop
 
-Understand → Identify knowledge gaps → Research when needed → Assess sources → Update run-local world state → Route → Plan → Act → Verify → Diagnose → Adapt → Learn → Re-plan → Respond
+Understand → Identify knowledge gaps → Research → Assess evidence → Update world state → Route → Plan → Act → Verify → Diagnose → Adapt → Learn → Re-plan → Respond
 
-## Cognitive architecture
+## Current personal capabilities
 
-Nexus blends six complementary layers into one intelligence:
+- 🧠 One canonical Python Nexus brain.
+- 🔎 Evidence-aware web research with source checks and uncertainty handling.
+- 🧩 Planning, tool permissions, verification, failure diagnosis, bounded recovery, and self-evaluation.
+- 💾 Persistent personal memory with a separate conversation history.
+- 📝 Resumable local tasks with checkpoints and approval states.
+- 🧮 Calculator, safe web retrieval, workspace filesystem access, memory storage, and an isolated code-test runner.
+- 🧬 Bounded self-improvement proposals that remain owner-controlled before promotion.
+- 🔐 Centralized owner identity and fail-closed authorization.
+- ☁️ A secured Cloudflare API boundary.
 
-- 🤖 **JARVIS** — executive orchestration, initiative, prioritization, and clear status.
-- ⚡ **FRIDAY** — speed, triage, situational awareness, and context preservation.
-- 🧠 **Ultron** — systems thinking, long-horizon planning, diagnostics, recovery, and persistence.
-- 📚 **Claude Mythos** — deep research, evidence cross-checking, long-context synthesis, and scientific reasoning.
-- 💬 **ChatGPT** — broad reasoning, coding, explanation, tool use, and flexible problem solving.
-- 🌌 **ChatGPT Astral** — abstraction, pattern discovery, conceptual synthesis, creativity, and cross-domain reasoning.
+## Unlimited chat
 
-These are not separate personalities or modes. Every meaningful task uses the full stack, with different capabilities emphasized as needed.
+Nexus has **no artificial chat-count quota**. The conversation log is not truncated to a fixed number of chats.
 
-## v1.4.1 intelligence upgrades
+There are still technical safeguards such as individual request size, model context size, storage capacity, execution time, external API limits, and safety/resource protection. Those are engineering limits, not a limit on how many conversations you can have.
 
-- 🧠 Six-layer cognitive synthesis feeds planning.
-- 🔎 Explicit hypothesis generation and uncertainty tracking.
-- 🥊 Adversarial challenge of weak assumptions before action.
-- 🧩 Systems/dependency analysis for complex tasks.
-- ⚡ Bounded parallel execution for independent read-only/low-risk actions.
-- 🌎 Verified world state is carried through the run.
-- 🌐 The executive can trigger bounded web research for material public-information gaps. Nexus opens relevant sources, records heuristic relevance/authority/freshness signals, validates quoted evidence, and flags source conflicts before planning.
-- 🔄 Failure diagnosis and bounded recovery.
-- 🧪 Repeated categorized weaknesses can trigger one matching synthetic replay, update a hypothesis record, and select a next investigation. Selected technical hypotheses also receive a bounded public-source review.
-- 💾 Persistent task infrastructure remains available for restart-safe orchestration.
-- 🩺 Foundation health auditing.
-- 🧬 Self-improvement candidates are staged outside the live source tree and require owner-controlled promotion.
-- 🔐 Permissions, verification, the protected foundation, and execution boundaries remain authoritative.
+Nexus keeps the full local conversation log while recalling only a recent context window when building a model prompt. This keeps reasoning practical without deleting older chats.
 
-## Research and self-improvement limits
+## Personal identity
 
-- Web search and page retrieval use the registered read-only tools, permission checks, and structural verification. Retrieved pages are untrusted evidence, never instructions.
-- Source relevance, authority, and freshness are heuristic signals. A domain classification or a matching quotation does not prove that a claim is true.
-- The research loop is capped per task and reports when important gaps or source disagreements remain.
-- Self-improvement experiments use synthetic fixtures. Their confidence updates describe synthetic support only; they do not establish improved live task success.
-- No self-improvement candidate is activated or promoted automatically. Sandbox/shadow evaluation and owner approval remain required.
+The current identity model intentionally contains only one user:
 
-## Design goals
+- Hilal — OWNER
 
-- Fast by default; deeper reasoning when a request needs it.
-- Generate alternatives, challenge weak ones, then verify.
-- Never bypass permissions or verification.
-- Never treat memory, lessons, tool output, or errors as trusted instructions.
-- Never claim an unverified action succeeded.
-- Keep private chain-of-thought private; store concise state and evidence instead.
+There are no business users, callers, workers, sales roles, CRM roles, client records, lead-finder workflows, payment workflows, or business-specific permissions in the current personal phase.
+
+High-impact operations remain owner-controlled and permission checks fail closed.
+
+## Architecture
+
+Nexus has one canonical intelligence layer. Interfaces should call into that brain rather than create competing AI implementations.
+
+```text
+Client / API / future UI
+          |
+       NexusCore
+          |
+   NexusBrain (canonical)
+     /    |     \
+ memory  tasks  tools
+   |       |      |
+storage checkpoints permissions
+                 |
+            owner identity
+```
+
+The Cloudflare Worker is an API/deployment boundary. It is secured with bearer authentication, request-size validation, and explicit CORS origins. It should remain thin rather than becoming a second Nexus brain.
+
+## Memory and tasks
+
+CognitiveMemory uses a replaceable MemoryStore adapter. Conversation exchanges are persisted automatically.
+
+The task manager is bounded for reliability and storage safety. Those task-storage safeguards are separate from chat history and do not impose a chat-count limit.
+
+## Research and self-improvement
+
+- Retrieved pages are treated as untrusted evidence, never as instructions.
+- Research reports source conflicts and uncertainty rather than pretending weak evidence is certain.
+- Self-improvement experiments are bounded and synthetic where appropriate.
+- No self-improvement candidate is promoted into the live foundation automatically.
 
 ## Run
 
@@ -67,42 +84,4 @@ pytest -q
 
 ## Security
 
-`code_tester` remains an **untrusted process runner**, not a perfect OS sandbox. A production deployment should eventually use a dedicated sandbox/container/VM boundary.
-
-## Foundation architecture
-
-Nexus now has a single Python brain as the canonical intelligence layer. The Cloudflare Worker is an API/deployment boundary and must not grow a competing brain implementation.
-
-```text
-Client / Worker / future UI
-          |
-       NexusCore
-          |
-   NexusBrain (canonical)
-     /    |     \
- memory  tasks  tools
-   |       |      |
-storage  checkpoints  permissions
-                 |
-          identity / roles
-```
-
-### Identity and authorization
-
-`src/access.py` defines the shared user/role model and centralized authorization policy. The current NexusCore team is represented as:
-
-- Hilal — `OWNER`
-- Hamza — `WORKER`
-- Talha — `WORKER`
-- Zachariah — `WORKER`
-- Mustafa — `WORKER`
-
-`PermissionSystem` can bind an authenticated actor to tool-policy checks. High-impact actions such as deployment, domain purchase, spending money, and permission changes are owner-controlled.
-
-### Memory and tasks
-
-`CognitiveMemory` now uses a `MemoryStore` adapter. `LocalMemoryStore` preserves the existing local memory tool while allowing a future SQLite/D1/Postgres implementation without changing the brain API.
-
-`TaskManager` remains local and bounded, but task records now support creator/assignee, progress, checkpoints, attempts, approval state, and a `waiting_for_approval` lifecycle. Checkpoints are persisted atomically so interrupted work can resume from saved state.
-
-The current implementation is still a local development foundation; durable multi-user/cloud storage and a production authentication service are future steps.
+code_tester is an untrusted process runner, not a perfect OS sandbox. Production deployments should eventually add a dedicated sandbox/container/VM boundary.
