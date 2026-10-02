@@ -68,3 +68,41 @@ pytest -q
 ## Security
 
 `code_tester` remains an **untrusted process runner**, not a perfect OS sandbox. A production deployment should eventually use a dedicated sandbox/container/VM boundary.
+
+## Foundation architecture
+
+Nexus now has a single Python brain as the canonical intelligence layer. The Cloudflare Worker is an API/deployment boundary and must not grow a competing brain implementation.
+
+```text
+Client / Worker / future UI
+          |
+       NexusCore
+          |
+   NexusBrain (canonical)
+     /    |     \
+ memory  tasks  tools
+   |       |      |
+storage  checkpoints  permissions
+                 |
+          identity / roles
+```
+
+### Identity and authorization
+
+`src/access.py` defines the shared user/role model and centralized authorization policy. The current NexusCore team is represented as:
+
+- Hilal — `OWNER`
+- Hamza — `WORKER`
+- Talha — `WORKER`
+- Zachariah — `WORKER`
+- Mustafa — `WORKER`
+
+`PermissionSystem` can bind an authenticated actor to tool-policy checks. High-impact actions such as deployment, domain purchase, spending money, and permission changes are owner-controlled.
+
+### Memory and tasks
+
+`CognitiveMemory` now uses a `MemoryStore` adapter. `LocalMemoryStore` preserves the existing local memory tool while allowing a future SQLite/D1/Postgres implementation without changing the brain API.
+
+`TaskManager` remains local and bounded, but task records now support creator/assignee, progress, checkpoints, attempts, approval state, and a `waiting_for_approval` lifecycle. Checkpoints are persisted atomically so interrupted work can resume from saved state.
+
+The current implementation is still a local development foundation; durable multi-user/cloud storage and a production authentication service are future steps.
