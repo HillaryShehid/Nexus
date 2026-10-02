@@ -1,0 +1,14 @@
+{
+  "name": "nexus-cloudflare-brain",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "@cloudflare/containers": "^0.0.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  },
+  "scripts": {
+    "deploy": "wrangler deploy"
+  }
+}
