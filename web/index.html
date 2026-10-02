@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Nexus — Personal AI</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">PERSONAL AI</div>
+        <h1>🧠 NEXUS</h1>
+      </div>
+      <div class="status"><span class="dot"></span><span id="status">Connecting…</span></div>
+    </header>
+
+    <section class="hero">
+      <p class="tagline">Your personal intelligence layer.</p>
+      <p class="sub">Talk to Nexus, give it a task, or use your voice. This is the first browser test interface for the real Python brain.</p>
+    </section>
+
+    <section class="chat-card">
+      <div id="messages" class="messages" aria-live="polite">
+        <div class="message nexus"><div class="label">NEXUS</div><div>I'm online. What would you like me to work on?</div></div>
+      </div>
+      <form id="chat-form" class="composer">
+        <button id="mic" type="button" class="icon-btn" title="Voice input" aria-label="Voice input">🎙️</button>
+        <input id="input" autocomplete="off" maxlength="8000" placeholder="Talk to Nexus…" />
+        <button class="send" type="submit">Send</button>
+      </form>
+      <div class="voice-row">
+        <span id="voice-status">Voice: ready</span>
+        <button id="speak-toggle" type="button" class="link-btn">🔊 Read responses aloud</button>
+      </div>
+    </section>
+
+    <footer>Personal Nexus • No business features • Local test interface</footer>
+  </main>
+  <script src="./app.js"></script>
+</body>
+</html>
