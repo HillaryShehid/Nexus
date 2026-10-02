@@ -1,4 +1,6 @@
 """Small local MemoryStore adapter backed by Nexus's existing memory tool."""
+import json
+
 from src.storage import MemoryStore
 
 
@@ -20,7 +22,7 @@ class LocalMemoryStore(MemoryStore):
     def append_conversation(self, value):
         result = self.tools.execute(
             "memory_store",
-            {"action": "append_conversation", "key": "chat_context", "value": __import__("json").dumps(value, ensure_ascii=False)[:24000]},
+            {"action": "append_conversation", "key": "chat_context", "value": json.dumps(value, ensure_ascii=False)[:24000]},
         )
         return result.get("success") is True
 
