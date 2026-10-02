@@ -265,8 +265,10 @@ class ToolSystem:
         try:
             with open(self.memory_file, "r", encoding="utf-8") as handle: loaded = json.load(handle)
             if isinstance(loaded, dict) and isinstance(loaded.get("conversations"), list) and isinstance(loaded.get("facts"), dict): return loaded
-        except (OSError, UnicodeError, json.JSONDecodeError): logger.warning("Memory file could not be read; resetting in-memory state.")
-        return {"conversations": [], "facts": {}}
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            logger.warning("Memory file could not be read safely.")
+            raise ValueError("Memory store is unreadable; refusing to overwrite it.") from exc
+        raise ValueError("Memory store has an invalid schema; refusing to overwrite it.")
 
     def _save_memory(self, data):
         parent = os.path.dirname(self.memory_file); os.makedirs(parent, exist_ok=True)
