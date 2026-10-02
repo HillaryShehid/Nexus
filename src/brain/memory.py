@@ -40,7 +40,15 @@ class CognitiveMemory:
         append = getattr(self.store, "append_conversation", None)
         if callable(append):
             return append(payload)
-        return self.store.save("chat_context", payload)
+        raw = self.store.get("chat_context")
+        try:
+            history = json.loads(raw) if raw else []
+        except (TypeError, json.JSONDecodeError):
+            history = []
+        if not isinstance(history, list):
+            history = []
+        history.append(payload)
+        return self.store.save("chat_context", json.dumps(history, ensure_ascii=False))
 
     def read_fact(self, key):
         return str(self.store.get(key[:80]))[:1500]
