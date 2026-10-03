@@ -8,11 +8,13 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from src.core import NexusCore
+from src.speech import NexusSpeech
 
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", "8787"))
 WEB_ROOT = Path(__file__).parent / "web"
 MAX_BODY = 16_000
+MAX_SPEECH_CHARS = 900
 NEXUS_API_TOKEN = os.getenv("NEXUS_API_TOKEN", "")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -20,6 +22,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 
 class Handler(BaseHTTPRequestHandler):
     nexus = None
+    speech = None
 
     def _json(self, status, payload):
         body = json.dumps(payload).encode("utf-8")
@@ -73,7 +76,11 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_POST(self):
-        if urlparse(self.path).path != "/api/chat":
+        path = urlparse(self.path).path
+        if path == "/api/speech":
+            self._handle_speech()
+            return
+        if path != "/api/chat":
             self._json(404, {"error": "Not found"})
             return
         if not self._authorized():
@@ -105,6 +112,41 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             logging.exception("Nexus web request failed.")
             self._json(500, {"error": "Nexus stopped safely after an internal error."})
+
+    def _handle_speech(self):
+        if not self._authorized():
+            self._json(401, {"error": "Unauthorized"})
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            self._json(400, {"error": "Invalid content length"})
+            return
+        if length <= 0 or length > MAX_BODY:
+            self._json(413, {"error": "Request body too large"})
+            return
+
+        try:
+            payload = json.loads(self.rfile.read(length))
+            text = payload.get("text")
+            if not isinstance(text, str) or not text.strip():
+                self._json(400, {"error": "text must be non-empty text"})
+                return
+            if len(text) > MAX_SPEECH_CHARS:
+                self._json(413, {"error": "Speech chunk exceeds Nexus speech limit"})
+                return
+            if self.speech is None:
+                self.speech = NexusSpeech()
+            audio = self.speech.synthesize(text)
+            self.send_response(200)
+            self.send_header("Content-Type", "audio/mpeg")
+            self.send_header("Content-Length", str(len(audio)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(audio)
+        except Exception:
+            logging.exception("Nexus speech request failed.")
+            self._json(500, {"error": "Nexus could not generate speech safely."})
 
     def log_message(self, fmt, *args):
         logging.info("%s - %s", self.address_string(), fmt % args)
