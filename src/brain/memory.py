@@ -19,12 +19,12 @@ class CognitiveMemory:
         if not isinstance(history, list) or not history:
             return "No persisted conversation context is loaded."
         # Keep the model prompt bounded while retaining the full conversation log.
-        recent = history[-20:]
+        recent = history[-40:]
         lines = []
         for item in recent:
             if isinstance(item, dict):
-                user = str(item.get("user", ""))[:4000]
-                assistant = str(item.get("assistant", ""))[:6000]
+                user = str(item.get("user", ""))[:8000]
+                assistant = str(item.get("assistant", ""))[:12000]
                 lines.append(f"User: {user}\nNexus: {assistant}")
         return "\n\n".join(lines) if lines else "No persisted conversation context is loaded."
 
