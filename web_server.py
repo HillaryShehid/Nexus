@@ -154,5 +154,5 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     print(f"🧠 Nexus development interface: http://{HOST}:{PORT}")
-    print("Voice input/output uses browser speech APIs when supported.")
+    print("Voice input uses browser speech recognition when supported; voice output uses OpenAI TTS.")
     ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
