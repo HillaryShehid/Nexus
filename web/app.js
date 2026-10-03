@@ -240,9 +240,6 @@ async function connectRealtime() {
   });
   microphone.getTracks().forEach((track) => pc.addTrack(track, microphone));
 
-  // The browser receives model audio on a negotiated WebRTC track.
-  pc.addTransceiver('audio', { direction: 'recvonly' });
-
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
