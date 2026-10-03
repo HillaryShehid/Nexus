@@ -12,7 +12,7 @@ class LearningSystem:
     def __init__(self):
         os.makedirs(WORKSPACE_DIR, exist_ok=True)
         self.log_path = os.path.abspath(os.path.join(WORKSPACE_DIR, "nexus_lessons.json"))
-        self.max_lessons_ceiling = 40
+        self.max_lessons_ceiling = None
 
     def _load(self) -> list:
         if not os.path.exists(self.log_path) or os.path.islink(self.log_path):
@@ -43,7 +43,7 @@ class LearningSystem:
                     "diagnosed_breakdown_cause": str(item["diagnosed_breakdown_cause"])[:200],
                     "operational_remedy": str(item["operational_remedy"])[:300],
                 })
-            return clean[-self.max_lessons_ceiling:]
+            return clean if self.max_lessons_ceiling is None else clean[-self.max_lessons_ceiling:]
         except (OSError, UnicodeError, json.JSONDecodeError):
             logger.warning("Lessons ledger could not be read; starting with empty lessons.")
             return []
@@ -79,7 +79,7 @@ class LearningSystem:
             "diagnosed_breakdown_cause": cause,
             "operational_remedy": remedy,
         })
-        lessons = lessons[-self.max_lessons_ceiling:]
+        lessons = lessons if self.max_lessons_ceiling is None else lessons[-self.max_lessons_ceiling:]
 
         directory = os.path.dirname(self.log_path)
         os.makedirs(directory, exist_ok=True)
@@ -111,7 +111,7 @@ class LearningSystem:
                 item["confidence"] = min(1.0, float(item.get("confidence", 0.5)) + 0.1)
                 return self._save(lessons)
         lessons.append({"type":"success_lesson","tool":tool,"arguments_used":safe_args,"observed_error_signature":"","diagnosed_breakdown_cause":"","operational_remedy":f"Reuse this verified pattern when the context is equivalent: {str(outcome)[:200]}","confidence":0.6})
-        return self._save(lessons[-self.max_lessons_ceiling:])
+        return self._save(lessons if self.max_lessons_ceiling is None else lessons[-self.max_lessons_ceiling:])
 
     def record_recovery(self, failed_task: dict, replacement_task: dict, cause: str) -> dict:
         lessons = self._load()
