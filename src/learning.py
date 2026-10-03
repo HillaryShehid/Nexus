@@ -12,7 +12,7 @@ class LearningSystem:
     def __init__(self):
         os.makedirs(WORKSPACE_DIR, exist_ok=True)
         self.log_path = os.path.abspath(os.path.join(WORKSPACE_DIR, "nexus_lessons.json"))
-        self.max_lessons_ceiling = 5
+        self.max_lessons_ceiling = None
 
     def _load(self) -> list:
         if not os.path.exists(self.log_path) or os.path.islink(self.log_path):
@@ -43,7 +43,7 @@ class LearningSystem:
                     "diagnosed_breakdown_cause": str(item["diagnosed_breakdown_cause"])[:200],
                     "operational_remedy": str(item["operational_remedy"])[:300],
                 })
-            return clean[-self.max_lessons_ceiling:]
+            return clean if self.max_lessons_ceiling is None else clean[-self.max_lessons_ceiling:]
         except (OSError, UnicodeError, json.JSONDecodeError):
             logger.warning("Lessons ledger could not be read; starting with empty lessons.")
             return []
@@ -72,13 +72,14 @@ class LearningSystem:
         safe_args = {str(k)[:40]: str(v)[:500] for k, v in list(safe_args.items())[:20]}
 
         lessons.append({
+            "type": "failure_lesson",
             "failed_tool": str(task.get("tool", "unknown"))[:80] if isinstance(task, dict) else "unknown",
             "arguments_used": safe_args,
             "observed_error_signature": error,
             "diagnosed_breakdown_cause": cause,
             "operational_remedy": remedy,
         })
-        lessons = lessons[-self.max_lessons_ceiling:]
+        lessons = lessons if self.max_lessons_ceiling is None else lessons[-self.max_lessons_ceiling:]
 
         directory = os.path.dirname(self.log_path)
         os.makedirs(directory, exist_ok=True)
@@ -99,10 +100,47 @@ class LearningSystem:
                     pass
             return {"success": False, "error": f"Learning storage error: {str(exc)[:200]}"}
 
+    def record_success(self, task: dict, outcome: str = "verified") -> dict:
+        lessons = self._load()
+        tool = str(task.get("tool", "unknown"))[:80] if isinstance(task, dict) else "unknown"
+        args = task.get("args", {}) if isinstance(task, dict) else {}
+        if not isinstance(args, dict): args = {}
+        safe_args = {str(k)[:40]: str(v)[:500] for k, v in list(args.items())[:20]}
+        for item in reversed(lessons):
+            if item.get("type") == "success_lesson" and item.get("tool") == tool and item.get("arguments_used") == safe_args:
+                item["confidence"] = min(1.0, float(item.get("confidence", 0.5)) + 0.1)
+                return self._save(lessons)
+        lessons.append({"type":"success_lesson","tool":tool,"arguments_used":safe_args,"observed_error_signature":"","diagnosed_breakdown_cause":"","operational_remedy":f"Reuse this verified pattern when the context is equivalent: {str(outcome)[:200]}","confidence":0.6})
+        return self._save(lessons if self.max_lessons_ceiling is None else lessons[-self.max_lessons_ceiling:])
+
+    def record_recovery(self, failed_task: dict, replacement_task: dict, cause: str) -> dict:
+        lessons = self._load()
+        failed_tool = str(failed_task.get("tool", "unknown"))[:80] if isinstance(failed_task, dict) else "unknown"
+        replacement_tool = str(replacement_task.get("tool", "unknown"))[:80] if isinstance(replacement_task, dict) else "unknown"
+        lessons.append({"type":"recovery_lesson","tool":replacement_tool,"arguments_used":{},"observed_error_signature":failed_tool,"diagnosed_breakdown_cause":str(cause)[:200],"operational_remedy":f"After {failed_tool} fails, reconsider the strategy; a verified recovery used {replacement_tool}.","confidence":0.7})
+        return self._save(lessons[-self.max_lessons_ceiling:])
+
+    def _save(self, lessons: list) -> dict:
+        directory = os.path.dirname(self.log_path)
+        os.makedirs(directory, exist_ok=True)
+        temp_name = None
+        try:
+            fd, temp_name = tempfile.mkstemp(dir=directory, prefix=".nexus_lessons_", suffix=".tmp")
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(lessons, handle, indent=2, ensure_ascii=False)
+                handle.flush(); os.fsync(handle.fileno())
+            os.replace(temp_name, self.log_path)
+            return {"success": True, "error": None}
+        except (OSError, TypeError, ValueError) as exc:
+            if temp_name:
+                try: os.unlink(temp_name)
+                except OSError: pass
+            return {"success": False, "error": f"Learning storage error: {str(exc)[:200]}"}
+
     def retrieve_lessons(self) -> str:
         lessons = self._load()
         if not lessons:
-            return "No historical failures recorded."
+            return "No historical lessons recorded."
         try:
             return json.dumps(lessons, indent=2, ensure_ascii=False)[:5000]
         except (TypeError, ValueError):

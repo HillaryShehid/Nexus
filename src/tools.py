@@ -316,8 +316,7 @@ class ToolSystem:
             elif key == "chat_context":
                 return {"success": False, "result": "", "error": "Memory Error: Use append_conversation for chat history."}
             else:
-                if len(data["facts"]) >= 30 and key not in data["facts"]:
-                    return {"success": False, "result": "", "error": "Storage Overflow Error: Memory limit reached."}
+                # No artificial fact-count cap. Physical storage is the only limit; model prompt context is bounded separately.
                 data["facts"][key] = value
             try:
                 self._save_memory(data)
