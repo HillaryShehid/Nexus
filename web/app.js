@@ -6,10 +6,10 @@ const dot = document.querySelector('.dot');
 const mic = document.querySelector('#mic');
 const voiceStatus = document.querySelector('#voice-status');
 const speakToggle = document.querySelector('#speak-toggle');
-let speakResponses = false;
-let recognition = null;
-let speechRun = 0;
-let currentAudio = null;
+
+let realtime = null;
+let realtimeAudio = null;
+let assistantTranscript = '';
 
 function addMessage(who, text) {
   const el = document.createElement('div');
@@ -48,14 +48,6 @@ async function sendMessage(text) {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Request failed');
     pending.lastChild.textContent = data.response || 'No response received.';
-    if (speakResponses) {
-      try {
-        await speak(data.response || '');
-      } catch (error) {
-        voiceStatus.textContent = 'Voice output error';
-        console.error(error);
-      }
-    }
   } catch (error) {
     pending.lastChild.textContent = error.message === 'Unauthorized'
       ? 'Nexus is private. Check the local access settings.'
@@ -73,86 +65,241 @@ form.addEventListener('submit', async (event) => {
   await sendMessage(text);
 });
 
-function splitSpeech(text, maxChars = 900) {
-  const chunks = [];
-  let current = '';
-  for (const paragraph of String(text || '').split(/\\n/)) {
-    for (const word of paragraph.trim().split(/\\s+/)) {
-      if (!word) continue;
-      const candidate = current ? current + ' ' + word : word;
-      if (candidate.length <= maxChars) {
-        current = candidate;
-      } else {
-        if (current) chunks.push(current);
-        current = word;
-      }
-    }
-    if (current) {
-      chunks.push(current);
-      current = '';
-    }
+function sendRealtimeEvent(event) {
+  if (!realtime?.dataChannel || realtime.dataChannel.readyState !== 'open') {
+    throw new Error('Realtime voice is not connected.');
   }
-  return chunks;
+  realtime.dataChannel.send(JSON.stringify(event));
 }
 
-async function speak(text) {
-  const run = ++speechRun;
-  if (currentAudio) {
-    currentAudio.pause();
-    currentAudio.src = '';
-    currentAudio = null;
+async function handleNexusToolCall(event) {
+  let args;
+  try {
+    args = JSON.parse(event.arguments || '{}');
+  } catch {
+    args = {};
   }
-  const chunks = splitSpeech(text);
-  if (!chunks.length) return;
 
-  voiceStatus.textContent = 'Generating Nexus voice…';
-  for (const chunk of chunks) {
-    if (run !== speechRun) return;
-    const response = await fetch('/api/speech', {
+  const request = typeof args.request === 'string' ? args.request.trim() : '';
+  if (!request) {
+    sendRealtimeEvent({
+      type: 'conversation.item.create',
+      item: {
+        type: 'function_call_output',
+        call_id: event.call_id,
+        output: JSON.stringify({ error: 'No user request was captured.' }),
+      },
+    });
+    sendRealtimeEvent({ type: 'response.create' });
+    return;
+  }
+
+  voiceStatus.textContent = 'Nexus is thinking…';
+  addMessage('You', request);
+
+  try {
+    const response = await fetch('/api/realtime/brain', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: chunk }),
+      body: JSON.stringify({ request }),
     });
-    if (!response.ok) throw new Error('Nexus speech generation failed');
-    const blob = await response.blob();
-    if (run !== speechRun) return;
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Nexus brain request failed');
 
-    const audio = new Audio(URL.createObjectURL(blob));
-    currentAudio = audio;
-    voiceStatus.textContent = 'Nexus is speaking…';
-    await new Promise((resolve, reject) => {
-      audio.onended = resolve;
-      audio.onerror = reject;
-      audio.play().catch(reject);
+    sendRealtimeEvent({
+      type: 'conversation.item.create',
+      item: {
+        type: 'function_call_output',
+        call_id: event.call_id,
+        output: JSON.stringify({ response: data.response || '' }),
+      },
     });
-    URL.revokeObjectURL(audio.src);
-    currentAudio = null;
+    sendRealtimeEvent({ type: 'response.create' });
+  } catch (error) {
+    console.error(error);
+    sendRealtimeEvent({
+      type: 'conversation.item.create',
+      item: {
+        type: 'function_call_output',
+        call_id: event.call_id,
+        output: JSON.stringify({
+          error: 'The Nexus brain could not complete this request safely.',
+        }),
+      },
+    });
+    sendRealtimeEvent({ type: 'response.create' });
   }
-  if (run === speechRun) voiceStatus.textContent = 'Voice: ready';
 }
 
-speakToggle.addEventListener('click', () => {
-  speakResponses = !speakResponses;
-  speakToggle.textContent = speakResponses ? '🔊 Read responses aloud: ON' : '🔊 Read responses aloud';
-  voiceStatus.textContent = speakResponses ? 'Voice output: on' : 'Voice: ready';
+function handleRealtimeEvent(event) {
+  switch (event.type) {
+    case 'session.created':
+    case 'session.updated':
+      voiceStatus.textContent = 'Realtime voice: ready';
+      break;
+
+    case 'input_audio_buffer.speech_started':
+      voiceStatus.textContent = 'Listening…';
+      break;
+
+    case 'input_audio_buffer.speech_stopped':
+      voiceStatus.textContent = 'Thinking…';
+      break;
+
+    case 'response.output_audio_transcript.delta':
+      assistantTranscript += event.delta || '';
+      voiceStatus.textContent = 'Nexus is speaking…';
+      break;
+
+    case 'response.output_audio_transcript.done':
+      if (assistantTranscript.trim()) {
+        addMessage('Nexus', assistantTranscript.trim());
+      }
+      assistantTranscript = '';
+      break;
+
+    case 'response.function_call_arguments.done':
+      if (event.name === 'nexus_brain') {
+        handleNexusToolCall(event).catch(console.error);
+      }
+      break;
+
+    case 'response.done':
+      if (event.response?.status === 'failed') {
+        voiceStatus.textContent = 'Voice response failed';
+      } else {
+        voiceStatus.textContent = 'Realtime voice: ready';
+      }
+      break;
+
+    case 'error':
+      console.error('Realtime error:', event);
+      voiceStatus.textContent = event.error?.message || 'Realtime voice error';
+      break;
+
+    default:
+      break;
+  }
+}
+
+async function connectRealtime() {
+  if (realtime) return;
+
+  if (!window.RTCPeerConnection || !navigator.mediaDevices?.getUserMedia) {
+    throw new Error('This browser does not support the required WebRTC microphone APIs.');
+  }
+
+  voiceStatus.textContent = 'Starting realtime voice…';
+  mic.textContent = '⏹️';
+
+  const tokenResponse = await fetch('/api/realtime/token', {
+    method: 'POST',
+    credentials: 'same-origin',
+  });
+  const tokenData = await tokenResponse.json();
+  if (!tokenResponse.ok) {
+    throw new Error(tokenData.error || 'Could not start the Realtime session.');
+  }
+
+  const pc = new RTCPeerConnection();
+  const dataChannel = pc.createDataChannel('oai-events');
+  const audio = new Audio();
+  audio.autoplay = true;
+  realtimeAudio = audio;
+
+  pc.ontrack = (event) => {
+    audio.srcObject = event.streams[0];
+  };
+
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'connected') {
+      voiceStatus.textContent = 'Realtime voice: listening';
+    } else if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
+      disconnectRealtime(false);
+    }
+  };
+
+  dataChannel.addEventListener('open', () => {
+    voiceStatus.textContent = 'Realtime voice: listening';
+  });
+  dataChannel.addEventListener('message', (event) => {
+    try {
+      handleRealtimeEvent(JSON.parse(event.data));
+    } catch (error) {
+      console.error('Invalid Realtime event:', error);
+    }
+  });
+
+  const microphone = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    },
+  });
+  microphone.getTracks().forEach((track) => pc.addTrack(track, microphone));
+
+  // The browser receives model audio on a negotiated WebRTC track.
+  pc.addTransceiver('audio', { direction: 'recvonly' });
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  const sdpResponse = await fetch('https://api.openai.com/v1/realtime/calls', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + tokenData.value,
+      'Content-Type': 'application/sdp',
+    },
+    body: offer.sdp,
+  });
+
+  if (!sdpResponse.ok) {
+    microphone.getTracks().forEach((track) => track.stop());
+    pc.close();
+    throw new Error('OpenAI could not establish the Realtime WebRTC session.');
+  }
+
+  const answer = await sdpResponse.text();
+  await pc.setRemoteDescription({ type: 'answer', sdp: answer });
+
+  realtime = { pc, dataChannel, microphone };
+}
+
+function disconnectRealtime(updateStatus = true) {
+  if (!realtime) return;
+
+  realtime.microphone?.getTracks().forEach((track) => track.stop());
+  realtime.dataChannel?.close();
+  realtime.pc?.close();
+  realtime = null;
+
+  if (realtimeAudio) {
+    realtimeAudio.srcObject = null;
+    realtimeAudio = null;
+  }
+
+  mic.textContent = '🎙️';
+  if (updateStatus) voiceStatus.textContent = 'Voice: off';
+}
+
+mic.addEventListener('click', async () => {
+  if (realtime) {
+    disconnectRealtime();
+    return;
+  }
+
+  try {
+    await connectRealtime();
+  } catch (error) {
+    disconnectRealtime(false);
+    voiceStatus.textContent = error.message || 'Could not start voice';
+    console.error(error);
+  }
 });
 
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (SpeechRecognition) {
-  recognition = new SpeechRecognition();
-  recognition.lang = 'en-CA';
-  recognition.interimResults = false;
-  recognition.continuous = false;
-  recognition.onstart = () => { voiceStatus.textContent = 'Listening…'; mic.textContent = '⏺️'; };
-  recognition.onend = () => { voiceStatus.textContent = 'Voice: ready'; mic.textContent = '🎙️'; };
-  recognition.onerror = () => { voiceStatus.textContent = 'Voice input error'; mic.textContent = '🎙️'; };
-  recognition.onresult = (event) => { input.value = event.results[0][0].transcript; input.focus(); };
-  mic.addEventListener('click', () => { try { recognition.start(); } catch {} });
-} else {
-  mic.disabled = true;
-  mic.title = 'Speech recognition is not supported in this browser';
-  voiceStatus.textContent = 'Voice input unavailable in this browser';
-}
+// This is now the realtime speech-to-speech control, not a TTS toggle.
+speakToggle.textContent = '🗣️ Realtime voice';
 
 checkHealth();
