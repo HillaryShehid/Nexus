@@ -249,6 +249,10 @@ class NexusBrain:
                     state.next_action = task
 
                     if result["verified"]:
+                        try:
+                            self.learning.record_success(task, "verified execution")
+                        except Exception as exc:
+                            logger.debug("Success learning unavailable (%s).", type(exc).__name__)
                         world.add_verified_step(task, result["result"])
                         state.world = world.snapshot()
                         state.completed_steps.append({
@@ -326,6 +330,10 @@ class NexusBrain:
             self._record_action_metrics(run_metrics, result)
 
             if result["verified"]:
+                try:
+                    self.learning.record_success(task, "verified execution")
+                except Exception as exc:
+                    logger.debug("Success learning unavailable (%s).", type(exc).__name__)
                 world.add_verified_step(task, result["result"])
                 state.world = world.snapshot()
                 state.completed_steps.append({
