@@ -8,7 +8,7 @@ def test_realtime_session_uses_current_ga_configuration():
     assert payload["type"] == "realtime"
     assert payload["model"] == "gpt-realtime-2.1"
     assert payload["audio"]["output"]["voice"] == "echo"
-    assert payload["tool_choice"] == "required"
+    assert payload["tool_choice"] == "auto"
     assert payload["tools"][0]["name"] == "nexus_brain"
     assert payload["turn_detection"]["interrupt_response"] is True
 
