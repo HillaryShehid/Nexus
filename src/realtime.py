@@ -89,7 +89,7 @@ class RealtimeVoice:
                     }
                 },
                 "temperature": self.config.temperature,
-                "tool_choice": "required",
+                "tool_choice": "auto",
                 "tools": [self.nexus_tool()],
                 "turn_detection": {
                     "type": "semantic_vad",
