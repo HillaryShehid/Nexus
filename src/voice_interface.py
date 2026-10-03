@@ -33,27 +33,6 @@ class VoiceController:
         self.session.set_mode(mode)
         return VoiceEvent("mode_changed", self.session.mode.value)
 
-    @classmethod
-    def chunk_response(cls, text: str) -> list[str]:
-        """Split long speech into lossless, natural chunks for TTS."""
-        text = str(text or "")
-        if not text:
-            return []
-        chunks, current = [], ""
-        for paragraph in text.split("\\n"):
-            for word in paragraph.split():
-                candidate = word if not current else current + " " + word
-                if len(candidate) <= cls.MAX_SPEECH_CHARS:
-                    current = candidate
-                else:
-                    if current:
-                        chunks.append(current)
-                    current = word
-            if current:
-                chunks.append(current)
-                current = ""
-        return chunks
-
     def route_response(self, text: str) -> VoiceEvent:
         if not self.session.should_output_audio():
             return VoiceEvent("visual_only", text)
