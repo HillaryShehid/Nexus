@@ -8,6 +8,8 @@ const voiceStatus = document.querySelector('#voice-status');
 const speakToggle = document.querySelector('#speak-toggle');
 let speakResponses = false;
 let recognition = null;
+let speechRun = 0;
+let currentAudio = null;
 
 function addMessage(who, text) {
   const el = document.createElement('div');
@@ -46,7 +48,14 @@ async function sendMessage(text) {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Request failed');
     pending.lastChild.textContent = data.response || 'No response received.';
-    if (speakResponses) speak(data.response || '');
+    if (speakResponses) {
+      try {
+        await speak(data.response || '');
+      } catch (error) {
+        voiceStatus.textContent = 'Voice output error';
+        console.error(error);
+      }
+    }
   } catch (error) {
     pending.lastChild.textContent = error.message === 'Unauthorized'
       ? 'Nexus is private. Check the local access settings.'
@@ -64,16 +73,63 @@ form.addEventListener('submit', async (event) => {
   await sendMessage(text);
 });
 
-function speak(text) {
-  if (!('speechSynthesis' in window)) {
-    voiceStatus.textContent = 'Voice output unavailable in this browser';
-    return;
+function splitSpeech(text, maxChars = 900) {
+  const chunks = [];
+  let current = '';
+  for (const paragraph of String(text || '').split(/\\n/)) {
+    for (const word of paragraph.trim().split(/\\s+/)) {
+      if (!word) continue;
+      const candidate = current ? current + ' ' + word : word;
+      if (candidate.length <= maxChars) {
+        current = candidate;
+      } else {
+        if (current) chunks.push(current);
+        current = word;
+      }
+    }
+    if (current) {
+      chunks.push(current);
+      current = '';
+    }
   }
-  speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 0.98;
-  utterance.pitch = 0.95;
-  speechSynthesis.speak(utterance);
+  return chunks;
+}
+
+async function speak(text) {
+  const run = ++speechRun;
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.src = '';
+    currentAudio = null;
+  }
+  const chunks = splitSpeech(text);
+  if (!chunks.length) return;
+
+  voiceStatus.textContent = 'Generating Nexus voice…';
+  for (const chunk of chunks) {
+    if (run !== speechRun) return;
+    const response = await fetch('/api/speech', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: chunk }),
+    });
+    if (!response.ok) throw new Error('Nexus speech generation failed');
+    const blob = await response.blob();
+    if (run !== speechRun) return;
+
+    const audio = new Audio(URL.createObjectURL(blob));
+    currentAudio = audio;
+    voiceStatus.textContent = 'Nexus is speaking…';
+    await new Promise((resolve, reject) => {
+      audio.onended = resolve;
+      audio.onerror = reject;
+      audio.play().catch(reject);
+    });
+    URL.revokeObjectURL(audio.src);
+    currentAudio = null;
+  }
+  if (run === speechRun) voiceStatus.textContent = 'Voice: ready';
 }
 
 speakToggle.addEventListener('click', () => {
