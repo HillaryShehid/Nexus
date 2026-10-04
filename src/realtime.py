@@ -88,7 +88,6 @@ class RealtimeVoice:
                         "speed": self.config.speed,
                     }
                 },
-                "temperature": self.config.temperature,
                 "tool_choice": "auto",
                 "tools": [self.nexus_tool()],
                 "turn_detection": {
