@@ -11,7 +11,7 @@ from src.brain.executor import ParallelActionExecutor
 from src.brain.experiments import SelfImprovementExperiments
 from src.brain.goals import GoalManager
 from src.brain.identity import NexusIdentity
-from src.brain.memory import CognitiveMemory
+from src.brain.memory import CognitiveMemory\nfrom src.brain.local_memory_store import LocalMemoryStore
 from src.brain.self_evaluation import SelfEvaluation
 from src.brain.self_improvement_loop import SelfImprovementLoop
 from src.brain.self_improvement import SelfImprovementEngine
@@ -47,7 +47,7 @@ class NexusBrain:
         self.permissions = permissions
         self.learning = learning
 
-        self.memory = CognitiveMemory(tools)
+        self.memory = CognitiveMemory(tools, store=LocalMemoryStore(tools))
         self.router = ReasoningRouter()
         self.executive = ExecutiveController(model)
         self.parallel_executor = ParallelActionExecutor()
