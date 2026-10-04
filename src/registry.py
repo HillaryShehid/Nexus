@@ -36,6 +36,27 @@ _MANIFEST = {
         "limits": {"action": ["read", "save", "append_conversation"], "key": 40, "value": None},
         "policy": "LOW_RISK",
     },
+    "email": {
+        "required_args": ["action"],
+        "types": {
+            "action": str,
+            "mailbox": str,
+            "limit": int,
+            "unread_only": bool,
+            "to": str,
+            "subject": str,
+            "body": str,
+        },
+        "limits": {
+            "action": ["read", "search", "send"],
+            "mailbox": 100,
+            "limit": 25,
+            "to": 320,
+            "subject": 300,
+            "body": 12000,
+        },
+        "policy": "ELEVATION_REQUIRED",
+    },
     "code_tester": {
         "required_args": ["python_code"],
         "types": {"python_code": str},
