@@ -19,7 +19,7 @@ class AIBrain:
     """Route Nexus reasoning profiles through the configured model provider."""
 
     def __init__(self):
-        self.provider = os.getenv("NEXUS_MODEL_PROVIDER", "openai").lower()
+        self.provider = os.getenv("NEXUS_MODEL_PROVIDER", "ollama").lower()
         if self.provider not in {"openai", "ollama"}:
             raise ValueError("NEXUS_MODEL_PROVIDER must be 'openai' or 'ollama'.")
 
