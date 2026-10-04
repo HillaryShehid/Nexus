@@ -48,17 +48,18 @@ class AutonomyEngine:
             outcome = str(payload.get("outcome", "")).lower()
             company = str(payload.get("company_name") or "the company")
             business_id = payload.get("business_id")
-            if business_id:
-                self.world_state.upsert("business", {
-                    "name": company,
-                    "status": outcome,
-                    "source": "call",
-                }, entity_id=str(business_id))
+            status = "sold" if outcome in self.SOLD_OUTCOMES else "interested" if outcome in self.INTERESTED_OUTCOMES else outcome
+            business = self.world_state.upsert("business", {
+                "name": company,
+                "status": status,
+                "source": "call",
+            }, entity_id=str(business_id) if business_id else None)
+            business_id = business["id"]
             if outcome in self.INTERESTED_OUTCOMES:
                 return self._task(
                     f"Research {company} and prepare the client website opportunity.",
                     RoleRouter.for_event("research.requested"), "high",
-                    business_id=str(business_id or ""),
+                    business_id=str(business_id),
                 )
             if outcome in self.SOLD_OUTCOMES:
                 return self._task(
