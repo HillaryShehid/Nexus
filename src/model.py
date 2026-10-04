@@ -48,9 +48,23 @@ class AIBrain:
         self.models = {
             profile: os.getenv(
                 f"NEXUS_{profile.upper()}_MODEL",
-                self.default_model,
+                (
+                    os.getenv("NEXUS_QUICK_MODEL", "llama3.2:1b")
+                    if profile == "quick" and self.provider == "ollama"
+                    else self.default_model
+                ),
             )
             for profile in ("quick", "normal", "deep", "coding", "research")
+        }
+
+        # Keep local conversational replies deliberately short so a slow
+        # CPU-only machine does not spend minutes generating unnecessary text.
+        self.max_tokens = {
+            "quick": int(os.getenv("NEXUS_QUICK_MAX_TOKENS", "192")),
+            "normal": int(os.getenv("NEXUS_NORMAL_MAX_TOKENS", "512")),
+            "deep": int(os.getenv("NEXUS_DEEP_MAX_TOKENS", "1024")),
+            "coding": int(os.getenv("NEXUS_CODING_MAX_TOKENS", "1024")),
+            "research": int(os.getenv("NEXUS_RESEARCH_MAX_TOKENS", "1024")),
         }
 
     def generate(
@@ -84,6 +98,7 @@ class AIBrain:
                 kwargs = {
                     "model": selected,
                     "messages": messages,
+                    "max_tokens": self.max_tokens.get(profile, 512),
                 }
                 if json_mode:
                     kwargs["response_format"] = {"type": "json_object"}
