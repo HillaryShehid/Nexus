@@ -73,10 +73,10 @@ class NexusCore:
         return self.authorization.describe(actor_id)
 
     def emit_event(self, event_type, source, payload=None):
-        """Record a world change and immediately reconcile autonomous work."""
+        """Record a world change and immediately reconcile that exact event."""
         event = NexusEvent(type=event_type, source=source, payload=payload or {})
         record = self.events.append(event)
-        reconciliation = self.autonomy.reconcile(limit=1)
+        reconciliation = self.autonomy.reconcile(limit=1, event_id=record["id"])
         return {"event": record, "reconciliation": reconciliation}
 
     def autonomous_check(self):
