@@ -19,7 +19,7 @@ class AIBrain:
     """Route Nexus reasoning profiles to OpenAI's current Responses API."""
 
     def __init__(self):
-        self.default_model = os.getenv("NEXUS_MODEL")
+        self.default_model = os.getenv("NEXUS_MODEL", "gpt-6-luna")
         if not self.default_model:
             raise ValueError(
                 "CRITICAL INITIALIZATION ERROR: 'NEXUS_MODEL' is missing."
@@ -73,6 +73,8 @@ class AIBrain:
                 # Responses API structured JSON mode. The planner still validates
                 # the returned schema independently, so model output is never
                 # treated as authoritative.
+                request["instructions"] = system_prompt + "\nReturn the requested result as valid JSON.";
+
                 request["text"] = {
                     "format": {
                         "type": "json_object",
