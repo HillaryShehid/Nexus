@@ -20,9 +20,12 @@ class AutonomyEngine:
         self.world_state = world_state
         self.notifier = notifier
 
-    def reconcile(self, limit: int = 50) -> dict[str, Any]:
+    def reconcile(self, limit: int = 50, event_id: str | None = None) -> dict[str, Any]:
+        pending = self.events.pending(limit)
+        if event_id is not None:
+            pending = [event for event in pending if event["id"] == event_id]
         processed, created, failed = 0, [], []
-        for event in self.events.pending(limit):
+        for event in pending:
             try:
                 task = self._handle_event(event)
                 if task is not None:
@@ -34,10 +37,19 @@ class AutonomyEngine:
                 self.events.mark(event["id"], "failed")
         return {"processed": processed, "tasks_created": len(created), "tasks": created, "failed": failed}
 
-    def _task(self, goal, role, priority="normal", **metadata):
+    def _task(self, goal, role, priority="normal", requires_approval=False, **metadata):
         profile = RoleRouter.profile(role)
-        metadata.update({"role": role.value, "allowed_entities": ",".join(profile.allowed_entity_types)})
-        return self.tasks.create(goal, priority=priority, created_by="nexus.autonomy", **metadata)
+        metadata.update({
+            "role": role.value,
+            "allowed_entities": ",".join(profile.allowed_entity_types),
+        })
+        task = self.tasks.create(
+            goal,
+            priority=priority,
+            created_by="nexus.autonomy",
+            requires_approval=requires_approval,
+        )
+        return self.tasks.update(task["id"], "queued", **metadata)
 
     def _handle_event(self, event: dict[str, Any]):
         event_type = event.get("type", "")
@@ -65,7 +77,7 @@ class AutonomyEngine:
                 return self._task(
                     f"Research {company}, prepare the website project, and queue it for Nexus Builder.",
                     RoleRouter.for_event("project.preparation.requested"), "high",
-                    business_id=str(business_id or ""),
+                    business_id=str(business_id),
                 )
             return None
 
@@ -88,7 +100,9 @@ class AutonomyEngine:
             project = str(payload.get("project_name") or "the website project")
             task = self._task(
                 f"Review approval request for {project}.",
-                role, "high", requires_review="true", project_id=str(payload.get("project_id") or ""),
+                role, "high",
+                requires_approval=True,
+                project_id=str(payload.get("project_id") or ""),
             )
             return self.tasks.update(task["id"], "waiting_for_approval")
 
