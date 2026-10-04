@@ -8,7 +8,6 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from src.core import NexusCore
-from src.realtime import RealtimeVoice
 
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", "8787"))
@@ -16,14 +15,12 @@ WEB_ROOT = Path(__file__).parent / "web"
 MAX_BODY = 16_000
 MAX_VOICE_REQUEST = 8_000
 NEXUS_API_TOKEN = os.getenv("NEXUS_API_TOKEN", "")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 
 class Handler(BaseHTTPRequestHandler):
     nexus = None
-    realtime = None
 
     def _json(self, status, payload):
         body = json.dumps(payload).encode("utf-8")
@@ -55,11 +52,6 @@ class Handler(BaseHTTPRequestHandler):
         if self.nexus is None:
             self.nexus = NexusCore(actor_id="hilal")
         return self.nexus
-
-    def _get_realtime(self):
-        if self.realtime is None:
-            self.realtime = RealtimeVoice()
-        return self.realtime
 
     def do_GET(self):
         path = urlparse(self.path).path
@@ -106,48 +98,82 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(401, {"error": "Unauthorized"})
                 return
 
-        if path == "/api/realtime/token":
+        if path == "/api/livekit/token":
             try:
-                if not OPENAI_API_KEY:
-                    self._json(503, {"error": "OPENAI_API_KEY is not configured on the Nexus server."})
+                livekit_url = os.getenv("LIVEKIT_URL", "")
+                api_key = os.getenv("LIVEKIT_API_KEY", "")
+                api_secret = os.getenv("LIVEKIT_API_SECRET", "")
+                if not livekit_url or not api_key or not api_secret:
+                    self._json(
+                        503,
+                        {
+                            "error": (
+                                "LiveKit is not configured. Set LIVEKIT_URL, "
+                                "LIVEKIT_API_KEY, and LIVEKIT_API_SECRET."
+                            )
+                        },
+                    )
                     return
-                token = self._get_realtime().create_client_secret(
-                    OPENAI_API_KEY,
-                    actor_id="hilal",
+
+                from livekit import api
+
+                identity = "nexus-user-" + os.urandom(8).hex()
+                room = "nexus-personal"
+                agent_name = os.getenv("NEXUS_LIVEKIT_AGENT_NAME", "nexus")
+                token = (
+                    api.AccessToken(api_key, api_secret)
+                    .with_identity(identity)
+                    .with_grants(
+                        api.VideoGrants(
+                            room_join=True,
+                            room=room,
+                            can_publish=True,
+                            can_subscribe=True,
+                            can_publish_data=True,
+                        )
+                    )
+                    .with_room_config(
+                        api.RoomConfiguration(
+                            agents=[api.RoomAgentDispatch(agent_name=agent_name)]
+                        )
+                    )
+                    .to_jwt()
                 )
-                # Only the short-lived client secret and effective session are
-                # returned. The long-lived server API key never reaches JS.
-                self._json(200, {
-                    "value": token["value"],
-                    "session": token.get("session"),
-                })
+                self._json(
+                    200,
+                    {
+                        "server_url": livekit_url,
+                        "participant_token": token,
+                        "room": room,
+                    },
+                )
             except Exception:
-                logging.exception("Realtime client secret creation failed.")
-                self._json(502, {"error": "Nexus could not start the Realtime voice session."})
+                logging.exception("LiveKit token creation failed.")
+                self._json(502, {"error": "Nexus could not start the LiveKit voice session."})
+            return
+
+        if path == "/api/realtime/token":
+            self._json(
+                410,
+                {
+                    "error": (
+                        "The OpenAI Realtime voice path has been replaced by "
+                        "the modular LiveKit voice pipeline."
+                    )
+                },
+            )
             return
 
         if path == "/api/realtime/brain":
-            try:
-                payload = self._read_json()
-                message = payload.get("request")
-                if not isinstance(message, str) or not message.strip():
-                    self._json(400, {"error": "request must be non-empty text"})
-                    return
-                if len(message) > MAX_VOICE_REQUEST:
-                    self._json(413, {"error": "Voice request exceeds Nexus input limit"})
-                    return
-
-                result = self._get_nexus().handle_request(message)
-                if isinstance(result, dict):
-                    result = result.get("response", result)
-                if not isinstance(result, str):
-                    result = str(result)
-                self._json(200, {"response": result})
-            except ValueError as exc:
-                self._json(400, {"error": str(exc)})
-            except Exception:
-                logging.exception("Realtime Nexus brain bridge failed.")
-                self._json(500, {"error": "Nexus stopped safely after an internal voice error."})
+            self._json(
+                410,
+                {
+                    "error": (
+                        "The OpenAI Realtime voice bridge has been replaced by "
+                        "the LiveKit Nexus agent."
+                    )
+                },
+            )
             return
 
         if path != "/api/chat":
@@ -182,5 +208,5 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     print(f"🧠 Nexus development interface: http://{HOST}:{PORT}")
-    print("Realtime voice uses OpenAI Realtime speech-to-speech over WebRTC.")
+    print("Voice uses the modular LiveKit agent pipeline.")
     ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
