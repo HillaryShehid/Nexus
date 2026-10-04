@@ -14,7 +14,7 @@ class AutonomyEngine:
     INTERESTED_OUTCOMES = frozenset({"interested", "yes", "follow_up"})
     SOLD_OUTCOMES = frozenset({"sold", "won", "closed_won"})
 
-    def __init__(self, events: EventStore, tasks, world_state, notifier=None):
+    def __init__(self, events: EventStore, tasks, world_state=None, notifier=None):
         self.events = events
         self.tasks = tasks
         self.world_state = world_state
@@ -61,12 +61,15 @@ class AutonomyEngine:
             company = str(payload.get("company_name") or "the company")
             business_id = payload.get("business_id")
             status = "sold" if outcome in self.SOLD_OUTCOMES else "interested" if outcome in self.INTERESTED_OUTCOMES else outcome
-            business = self.world_state.upsert("business", {
+            if self.world_state is not None:
+                business = self.world_state.upsert("business", {
                 "name": company,
                 "status": status,
                 "source": "call",
-            }, entity_id=str(business_id) if business_id else None)
-            business_id = business["id"]
+                }, entity_id=str(business_id) if business_id else None)
+                business_id = business["id"]
+            if self.world_state is None:
+                business_id = str(business_id or company)
             if outcome in self.INTERESTED_OUTCOMES:
                 return self._task(
                     f"Research {company} and prepare the client website opportunity.",
