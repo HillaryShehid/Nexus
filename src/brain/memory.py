@@ -2,12 +2,22 @@ import json
 from datetime import datetime, timezone
 
 
+class _EphemeralMemoryStore:
+    def get(self, key):
+        return ""
+
+    def save(self, key, value):
+        return False
+
+    def append_conversation(self, value):
+        return False
+
 
 class CognitiveMemory:
-    """Memory facade with a replaceable storage adapter."""
-    def __init__(self, tools, store=None):
+    """Memory facade with an explicitly injected storage adapter."""
+    def __init__(self, tools=None, store=None):
         self.tools = tools
-        self.store = store or LocalMemoryStore(tools)
+        self.store = store if store is not None else _EphemeralMemoryStore()
 
     def read_context(self):
         raw = self.store.get("chat_context")
@@ -17,14 +27,23 @@ class CognitiveMemory:
             return "No persisted conversation context is loaded."
         if not isinstance(history, list) or not history:
             return "No persisted conversation context is loaded."
-        # Keep the model prompt bounded while retaining the full conversation log.
-        recent = history[-40:]
+
+        normalized = []
+        for item in history:
+            if isinstance(item, str):
+                try:
+                    item = json.loads(item)
+                except (TypeError, json.JSONDecodeError):
+                    continue
+            if isinstance(item, dict):
+                normalized.append(item)
+
+        recent = normalized[-20:]
         lines = []
         for item in recent:
-            if isinstance(item, dict):
-                user = str(item.get("user", ""))[:8000]
-                assistant = str(item.get("assistant", ""))[:12000]
-                lines.append(f"User: {user}\nNexus: {assistant}")
+            user = str(item.get("user", ""))[:8000]
+            assistant = str(item.get("assistant", ""))[:12000]
+            lines.append(f"User: {user}\nNexus: {assistant}")
         return "\n\n".join(lines) if lines else "No persisted conversation context is loaded."
 
     def save_conversation(self, user_message, assistant_message):
