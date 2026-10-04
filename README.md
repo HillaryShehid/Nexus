@@ -1,6 +1,6 @@
-# Nexus v1.6.0 — Personal AI Assistant
+# Nexus v1.7.0 — Event-Driven AI Operating System
 
-Nexus is currently **personal-first**. Business/CRM/sales/client workflows are intentionally out of scope for this phase so the core assistant can become deeper and more reliable first.
+Nexus is the canonical intelligence layer behind Nexus Core: one shared brain with specialized Business, Builder, and Researcher roles. The current implementation is being built toward the master vision incrementally; the event/autonomy foundation is now active while full business-domain adapters are developed.
 
 
 ### Fast local conversation mode
@@ -12,6 +12,41 @@ Simple conversational messages are routed through a lightweight one-call path us
 Nexus is a personal AI system built around **one canonical intelligence layer** rather than a collection of disconnected assistants.
 
 The underlying model provides intelligence; Nexus provides the surrounding system: identity, memory, planning, permissions, tools, verification, learning, and interfaces.
+
+## Event-driven autonomy
+
+Nexus now has a durable event backbone so important state changes do not depend on a user typing a command. Events can wake Nexus immediately and become resumable tasks, while an optional background scheduler performs the broader **"what needs attention right now?"** reconciliation every 15 minutes.
+
+Initial event flows include:
+
+- 📞 Call outcome → interested → research/client opportunity task
+- 📞 Call outcome → sold → research + Nexus Builder preparation task
+- ✉️ Email received → actionable email-review task
+- 💳 Payment change → payment-review task
+- 🌐 Project approval requested → owner-controlled approval task
+- 🔔 Unknown events remain visible as review tasks instead of being silently dropped
+
+The event layer is deliberately separate from the model. A stronger model provider can therefore be added later without rebuilding Nexus's state, autonomy, task, permission, or interface architecture.
+
+### Autonomy architecture
+
+```text
+World change
+    ↓
+🧾 Durable Nexus event
+    ↓
+🧠 Autonomy engine
+    ↓
+Task / workflow decision
+    ↓
+Resumable Nexus task
+    ↓
+Research → Build → Verify → Escalate / Act
+```
+
+`NexusCore.emit_event(...)` records a world change and immediately reconciles it. `NexusCore.autonomous_check()` runs the scheduled-style reconciliation on demand, and `NexusCore.start_autonomy()` enables the optional 15-minute background loop.
+
+`Nexus` remains responsible for identity, memory, reasoning, tools, permissions, verification, learning, and interfaces; the underlying model remains replaceable.
 
 ## Cognitive loop
 
