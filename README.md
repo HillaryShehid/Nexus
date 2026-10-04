@@ -5,7 +5,7 @@ Nexus is currently **personal-first**. Business/CRM/sales/client workflows are i
 
 ### Fast local conversation mode
 
-Simple conversational messages are routed through a lightweight one-call path. This avoids running the full planning, verification, research, and self-evaluation pipeline for messages that do not require actions, while preserving Nexus identity, recalled memory, and conversation persistence. Requests that need tools, research, coding, or other actions still use the full verified executive pipeline.
+Simple conversational messages are routed through a lightweight one-call path using a smaller local model by default. This avoids running the full planning, verification, research, and self-evaluation pipeline for messages that do not require actions, while preserving Nexus identity, recalled memory, and conversation persistence. Requests that need tools, research, coding, or other actions still use the full verified executive pipeline.
 
 ## What Nexus is
 
@@ -74,7 +74,7 @@ LiveKit is the realtime transport/orchestration layer, while NexusCore remains t
 
 ## Local-first model
 
-The default model provider is **Ollama** with `llama3.2`.
+The default model provider is **Ollama**. Quick conversation defaults to the smaller `llama3.2:1b` model for low latency, while normal/deeper profiles continue to use `llama3.2` unless overridden.
 
 Nexus can still use OpenAI when explicitly selected with:
 
@@ -88,6 +88,7 @@ For local inference:
 ```env
 NEXUS_MODEL_PROVIDER=ollama
 NEXUS_LOCAL_MODEL=llama3.2
+NEXUS_QUICK_MODEL=llama3.2:1b
 NEXUS_OLLAMA_URL=http://localhost:11434/v1
 ```
 
