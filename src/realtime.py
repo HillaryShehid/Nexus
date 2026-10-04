@@ -86,15 +86,17 @@ class RealtimeVoice:
                     "output": {
                         "voice": self.config.voice,
                         "speed": self.config.speed,
-                    }
+                    },
+                    "input": {
+                        "turn_detection": {
+                            "type": "semantic_vad",
+                            "create_response": True,
+                            "interrupt_response": True,
+                        },
+                    },
                 },
                 "tool_choice": "auto",
                 "tools": [self.nexus_tool()],
-                "turn_detection": {
-                    "type": "semantic_vad",
-                    "create_response": True,
-                    "interrupt_response": True,
-                },
             }
         }
 
