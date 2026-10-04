@@ -7,9 +7,8 @@ const mic = document.querySelector('#mic');
 const voiceStatus = document.querySelector('#voice-status');
 const speakToggle = document.querySelector('#speak-toggle');
 
-let realtime = null;
-let realtimeAudio = null;
-let assistantTranscript = '';
+let voiceRoom = null;
+let attachedAudio = [];
 
 function addMessage(who, text) {
   const el = document.createElement('div');
@@ -65,238 +64,102 @@ form.addEventListener('submit', async (event) => {
   await sendMessage(text);
 });
 
-function sendRealtimeEvent(event) {
-  if (!realtime?.dataChannel || realtime.dataChannel.readyState !== 'open') {
-    throw new Error('Realtime voice is not connected.');
-  }
-  realtime.dataChannel.send(JSON.stringify(event));
+function attachRemoteAudio(track) {
+  const element = track.attach();
+  element.autoplay = true;
+  document.body.appendChild(element);
+  attachedAudio.push(element);
 }
 
-async function handleNexusToolCall(event) {
-  let args;
-  try {
-    args = JSON.parse(event.arguments || '{}');
-  } catch {
-    args = {};
+function detachRemoteAudio() {
+  for (const element of attachedAudio) {
+    try {
+      element.remove();
+    } catch {}
   }
-
-  const request = typeof args.request === 'string' ? args.request.trim() : '';
-  if (!request) {
-    sendRealtimeEvent({
-      type: 'conversation.item.create',
-      item: {
-        type: 'function_call_output',
-        call_id: event.call_id,
-        output: JSON.stringify({ error: 'No user request was captured.' }),
-      },
-    });
-    sendRealtimeEvent({ type: 'response.create' });
-    return;
-  }
-
-  voiceStatus.textContent = 'Nexus is thinking…';
-  addMessage('You', request);
-
-  try {
-    const response = await fetch('/api/realtime/brain', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ request }),
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Nexus brain request failed');
-
-    sendRealtimeEvent({
-      type: 'conversation.item.create',
-      item: {
-        type: 'function_call_output',
-        call_id: event.call_id,
-        output: JSON.stringify({ response: data.response || '' }),
-      },
-    });
-    sendRealtimeEvent({ type: 'response.create' });
-  } catch (error) {
-    console.error(error);
-    sendRealtimeEvent({
-      type: 'conversation.item.create',
-      item: {
-        type: 'function_call_output',
-        call_id: event.call_id,
-        output: JSON.stringify({
-          error: 'The Nexus brain could not complete this request safely.',
-        }),
-      },
-    });
-    sendRealtimeEvent({ type: 'response.create' });
-  }
+  attachedAudio = [];
 }
 
-function handleRealtimeEvent(event) {
-  switch (event.type) {
-    case 'session.created':
-    case 'session.updated':
-      voiceStatus.textContent = 'Realtime voice: ready';
-      break;
+async function connectLiveKit() {
+  if (voiceRoom) return;
 
-    case 'input_audio_buffer.speech_started':
-      voiceStatus.textContent = 'Listening…';
-      break;
-
-    case 'input_audio_buffer.speech_stopped':
-      voiceStatus.textContent = 'Thinking…';
-      break;
-
-    case 'response.output_audio_transcript.delta':
-      assistantTranscript += event.delta || '';
-      voiceStatus.textContent = 'Nexus is speaking…';
-      break;
-
-    case 'response.output_audio_transcript.done':
-      if (assistantTranscript.trim()) {
-        addMessage('Nexus', assistantTranscript.trim());
-      }
-      assistantTranscript = '';
-      break;
-
-    case 'response.function_call_arguments.done':
-      if (event.name === 'nexus_brain') {
-        handleNexusToolCall(event).catch(console.error);
-      }
-      break;
-
-    case 'response.done':
-      if (event.response?.status === 'failed') {
-        voiceStatus.textContent = 'Voice response failed';
-      } else {
-        voiceStatus.textContent = 'Realtime voice: ready';
-      }
-      break;
-
-    case 'error':
-      console.error('Realtime error:', event);
-      voiceStatus.textContent = event.error?.message || 'Realtime voice error';
-      break;
-
-    default:
-      break;
-  }
-}
-
-async function connectRealtime() {
-  if (realtime) return;
-
-  if (!window.RTCPeerConnection || !navigator.mediaDevices?.getUserMedia) {
-    throw new Error('This browser does not support the required WebRTC microphone APIs.');
+  if (!window.LivekitClient) {
+    throw new Error('LiveKit client library did not load.');
   }
 
-  voiceStatus.textContent = 'Starting realtime voice…';
+  voiceStatus.textContent = 'Starting LiveKit voice…';
   mic.textContent = '⏹️';
 
-  const tokenResponse = await fetch('/api/realtime/token', {
+  const tokenResponse = await fetch('/api/livekit/token', {
     method: 'POST',
     credentials: 'same-origin',
   });
   const tokenData = await tokenResponse.json();
+
   if (!tokenResponse.ok) {
-    throw new Error(tokenData.error || 'Could not start the Realtime session.');
+    throw new Error(tokenData.error || 'Could not start LiveKit voice.');
   }
 
-  const pc = new RTCPeerConnection();
-  const dataChannel = pc.createDataChannel('oai-events');
-  const audio = new Audio();
-  audio.autoplay = true;
-  realtimeAudio = audio;
-
-  pc.ontrack = (event) => {
-    audio.srcObject = event.streams[0];
-  };
-
-  pc.onconnectionstatechange = () => {
-    if (pc.connectionState === 'connected') {
-      voiceStatus.textContent = 'Realtime voice: listening';
-    } else if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
-      disconnectRealtime(false);
-    }
-  };
-
-  dataChannel.addEventListener('open', () => {
-    voiceStatus.textContent = 'Realtime voice: listening';
+  const room = new LivekitClient.Room({
+    adaptiveStream: true,
+    dynacast: true,
   });
-  dataChannel.addEventListener('message', (event) => {
-    try {
-      handleRealtimeEvent(JSON.parse(event.data));
-    } catch (error) {
-      console.error('Invalid Realtime event:', error);
+
+  room.on(LivekitClient.RoomEvent.TrackSubscribed, (track) => {
+    if (track.kind === LivekitClient.Track.Kind.Audio) {
+      attachRemoteAudio(track);
     }
   });
 
-  const microphone = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-    },
-  });
-  microphone.getTracks().forEach((track) => pc.addTrack(track, microphone));
-
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-
-  const sdpResponse = await fetch('https://api.openai.com/v1/realtime/calls', {
-    method: 'POST',
-    headers: {
-      Authorization: 'Bearer ' + tokenData.value,
-      'Content-Type': 'application/sdp',
-    },
-    body: offer.sdp,
+  room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
+    track.detach().forEach((element) => element.remove());
   });
 
-  if (!sdpResponse.ok) {
-    microphone.getTracks().forEach((track) => track.stop());
-    pc.close();
-    throw new Error('OpenAI could not establish the Realtime WebRTC session.');
-  }
+  room.on(LivekitClient.RoomEvent.Disconnected, () => {
+    disconnectLiveKit(false);
+  });
 
-  const answer = await sdpResponse.text();
-  await pc.setRemoteDescription({ type: 'answer', sdp: answer });
+  await room.connect(tokenData.server_url, tokenData.participant_token);
+  await room.localParticipant.setMicrophoneEnabled(true);
 
-  realtime = { pc, dataChannel, microphone };
+  voiceRoom = room;
+  voiceStatus.textContent = 'LiveKit voice: listening';
 }
 
-function disconnectRealtime(updateStatus = true) {
-  if (!realtime) return;
+function disconnectLiveKit(updateStatus = true) {
+  if (!voiceRoom) return;
 
-  realtime.microphone?.getTracks().forEach((track) => track.stop());
-  realtime.dataChannel?.close();
-  realtime.pc?.close();
-  realtime = null;
-
-  if (realtimeAudio) {
-    realtimeAudio.srcObject = null;
-    realtimeAudio = null;
+  try {
+    voiceRoom.localParticipant.setMicrophoneEnabled(false);
+    voiceRoom.disconnect();
+  } catch (error) {
+    console.error(error);
   }
 
+  voiceRoom = null;
+  detachRemoteAudio();
   mic.textContent = '🎙️';
-  if (updateStatus) voiceStatus.textContent = 'Voice: off';
+
+  if (updateStatus) {
+    voiceStatus.textContent = 'Voice: off';
+  }
 }
 
 mic.addEventListener('click', async () => {
-  if (realtime) {
-    disconnectRealtime();
+  if (voiceRoom) {
+    disconnectLiveKit();
     return;
   }
 
   try {
-    await connectRealtime();
+    await connectLiveKit();
   } catch (error) {
-    disconnectRealtime(false);
+    disconnectLiveKit(false);
     voiceStatus.textContent = error.message || 'Could not start voice';
     console.error(error);
   }
 });
 
-// This is now the realtime speech-to-speech control, not a TTS toggle.
-speakToggle.textContent = '🗣️ Realtime voice';
+speakToggle.textContent = '🗣️ LiveKit voice';
 
 checkHealth();
