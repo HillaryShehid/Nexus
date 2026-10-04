@@ -22,16 +22,17 @@ Understand → Identify knowledge gaps → Research → Assess evidence → Upda
 - 🧮 Calculator, safe web retrieval, workspace filesystem access, memory storage, and an isolated code-test runner.
 - 🧬 Bounded self-improvement proposals that remain owner-controlled before promotion.
 - 🔐 Centralized owner identity and fail-closed authorization.
-- 🎙️ **OpenAI Realtime voice conversation** with real-time speech-to-speech over WebRTC.
-- 🗣️ Natural voice turn-taking with semantic voice activity detection and interruption support.
-- 🔗 Realtime voice requests are bridged back into the existing NexusCore, keeping Nexus memory, planning, permissions, tools, verification, and learning authoritative.
-- 🔒 The long-lived OpenAI API key stays server-side; the browser receives only a short-lived Realtime client secret.
+- 🎙️ Modular LiveKit voice architecture for realtime speech-to-speech conversations.
+- 🗣️ Natural voice turn-taking with configurable VAD/STT/TTS providers.
+- 🔗 Voice requests are bridged back into the existing NexusCore, keeping Nexus memory, planning, permissions, tools, verification, and learning authoritative.
+- 🦙 Local-first model inference through Ollama is now the default, so normal Nexus reasoning does not require paid OpenAI API credits.
+- ✉️ Owner-controlled email integration supports reading/searching mail and permission-gated sending.
 
 ## Realtime voice
 
-Nexus uses OpenAI's Realtime API for actual **speech-to-speech conversation**.
+Nexus uses a modular **LiveKit voice pipeline** for actual speech-to-speech conversation.
 
-The voice architecture is:
+The default local-first architecture is:
 
 ```text
 Your microphone
@@ -40,21 +41,22 @@ Your microphone
  Browser WebRTC
       |
       v
- OpenAI Realtime
+    LiveKit
       |
-      |  nexus_brain function call
+      +--> STT (Deepgram optional / local inference fallback)
+      |
+      v
+ Local Ollama model
+      |
       v
    NexusCore
-      |
-      v
- NexusBrain
       |
       |  memory / tools / planning / verification / learning
       v
  Authoritative Nexus response
       |
       v
- OpenAI Realtime
+ TTS (Kokoro local / ElevenLabs optional)
       |
       v
  Browser speaker
@@ -63,32 +65,30 @@ Your microphone
      You
 ```
 
-This is deliberately different from a traditional:
+LiveKit is the realtime transport/orchestration layer, while NexusCore remains the authoritative brain. Cloud providers can be enabled later, but local Ollama + local voice components are the preferred zero-cost development path.
 
-```text
-Speech-to-text → text model → text-to-speech
-```
+## Local-first model
 
-pipeline. Realtime handles the live audio conversation, while substantive requests are routed through the existing Nexus brain.
+The default model provider is **Ollama** with `llama3.2`.
 
-### Voice behavior
-
-- 🎙️ Browser microphone input is captured through WebRTC.
-- 🔊 Nexus audio is returned through the WebRTC audio track.
-- ⚡ Voice activity detection handles natural turn-taking.
-- 🛑 Nexus can be interrupted while speaking.
-- 🧠 Substantive requests are sent to the existing NexusCore instead of creating a separate voice-only brain.
-- 🔐 The server mints the short-lived Realtime client secret; the permanent API key is never exposed to browser JavaScript.
-- ⚙️ The Realtime model and voice are configurable through environment variables.
-
-Default configuration:
+Nexus can still use OpenAI when explicitly selected with:
 
 ```env
-NEXUS_REALTIME_MODEL=gpt-realtime-2.1
-NEXUS_REALTIME_VOICE=echo
-NEXUS_REALTIME_TEMPERATURE=0.8
-NEXUS_REALTIME_SPEED=0.98
+NEXUS_MODEL_PROVIDER=openai
+OPENAI_API_KEY=...
 ```
+
+For local inference:
+
+```env
+NEXUS_MODEL_PROVIDER=ollama
+NEXUS_LOCAL_MODEL=llama3.2
+NEXUS_OLLAMA_URL=http://localhost:11434/v1
+```
+
+## Email
+
+Nexus includes an owner-controlled IMAP/SMTP email adapter. Reading/searching mail can be used by the assistant, while outbound sending remains permission-gated.
 
 ## Unlimited chat
 
@@ -148,7 +148,7 @@ python -m pip install -e ".[dev]"
 python run.py
 ```
 
-For the Realtime voice interface, configure `OPENAI_API_KEY` on the Nexus server before starting the local web interface.
+For the local-first web interface, start Ollama with the configured local model. LiveKit voice credentials are only needed when using the realtime voice path.
 
 ## Tests
 
@@ -158,7 +158,7 @@ pytest -q
 
 ## Security
 
-- 🔐 The permanent OpenAI API key must remain server-side.
-- 🛡️ Realtime client sessions use short-lived credentials.
-- 🧠 Voice requests remain subject to NexusCore's existing authorization and safety controls.
+- 🔐 Provider credentials remain server-side.
+- 🛡️ LiveKit session credentials are minted by the local Nexus server.
+- 🧠 Voice and email requests remain subject to NexusCore's existing authorization and safety controls.
 - ⚠️ `code_tester` is an untrusted process runner, not a perfect OS sandbox. Production deployments should eventually add a dedicated sandbox/container/VM boundary.
