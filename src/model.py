@@ -49,7 +49,7 @@ class AIBrain:
             profile: os.getenv(
                 f"NEXUS_{profile.upper()}_MODEL",
                 (
-                    os.getenv("NEXUS_QUICK_MODEL", "llama3.2:1b")
+                    os.getenv("NEXUS_QUICK_MODEL", "qwen2.5:1.5b")
                     if profile == "quick" and self.provider == "ollama"
                     else self.default_model
                 ),
