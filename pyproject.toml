@@ -10,6 +10,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+voice = [
+  "livekit-agents~=1.8",
+  "livekit-api>=1.0",
+  "livekit-plugins-openai~=1.8",
+  "livekit-plugins-silero~=1.8",
+  "livekit-plugins-deepgram~=1.8",
+  "livekit-plugins-elevenlabs~=1.8",
+]
 dev = [
   "pytest>=8.0",
   "pytest-mock>=3.0",
