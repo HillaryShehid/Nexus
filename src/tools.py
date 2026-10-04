@@ -32,7 +32,7 @@ class ToolSystem:
         self.memory_file = os.path.abspath(os.path.join(self.workspace_root, "nexus_memory.json"))
         self.allowed_operators = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv, ast.Pow: operator.pow, ast.USub: operator.neg, ast.UAdd: operator.pos}
         self.allowed_nodes = (ast.Expression, ast.Constant, ast.BinOp, ast.UnaryOp, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.USub, ast.UAdd)
-        self.dispatch_table = {"web_search": self.tool_web_search, "read_page": self.tool_read_page, "calculator": self.tool_calculator, "file_system": self.tool_file_system, "memory_store": self.tool_memory_store, "code_tester": self.tool_code_tester}
+        self.dispatch_table = {"web_search": self.tool_web_search, "read_page": self.tool_read_page, "calculator": self.tool_calculator, "file_system": self.tool_file_system, "memory_store": self.tool_memory_store, "code_tester": self.tool_code_tester, "email": self.tool_email}
         self._memory_lock = threading.RLock()
 
     def _validate_args(self, tool_name, args):
@@ -333,6 +333,40 @@ class ToolSystem:
         except Exception:
             try: process.kill()
             except OSError: pass
+
+    def tool_email(self, action, mailbox="INBOX", limit=10, unread_only=False, to="", subject="", body=""):
+        from src.email_service import EmailService
+
+        service = EmailService()
+        if action in {"read", "search"}:
+            messages = service.list_messages(
+                mailbox=mailbox,
+                limit=limit,
+                unread_only=unread_only,
+            )
+            if action == "search" and subject:
+                needle = subject.lower()
+                messages = [
+                    item for item in messages
+                    if needle in item.get("subject", "").lower()
+                ]
+            return {
+                "success": True,
+                "result": json.dumps(messages, ensure_ascii=False),
+                "error": None,
+            }
+        if action == "send":
+            result = service.send_message(to=to, subject=subject, body=body)
+            return {
+                "success": True,
+                "result": json.dumps(result, ensure_ascii=False),
+                "error": None,
+            }
+        return {
+            "success": False,
+            "result": "",
+            "error": "Email Error: Unsupported action.",
+        }
 
     def tool_code_tester(self, python_code):
         with tempfile.TemporaryDirectory(prefix="nexus_runner_") as tmpdir:
