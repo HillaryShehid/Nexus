@@ -1,7 +1,6 @@
 import json
 from datetime import datetime, timezone
 
-from src.brain.local_memory_store import LocalMemoryStore
 
 
 class CognitiveMemory:
