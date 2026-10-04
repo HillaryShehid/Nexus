@@ -2,6 +2,11 @@
 
 Nexus is currently **personal-first**. Business/CRM/sales/client workflows are intentionally out of scope for this phase so the core assistant can become deeper and more reliable first.
 
+
+### Fast local conversation mode
+
+Simple conversational messages are routed through a lightweight one-call path. This avoids running the full planning, verification, research, and self-evaluation pipeline for messages that do not require actions, while preserving Nexus identity, recalled memory, and conversation persistence. Requests that need tools, research, coding, or other actions still use the full verified executive pipeline.
+
 ## What Nexus is
 
 Nexus is a personal AI system built around **one canonical intelligence layer** rather than a collection of disconnected assistants.
