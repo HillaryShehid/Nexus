@@ -48,6 +48,8 @@ class PermissionSystem:
             return {"status": "blocked", "reason": "Requested action is not permitted."}
 
         policy = spec["policy"]
+        if tool_name == "email" and args.get("action") in {"read", "search"}:
+            return {"status": "allowed", "reason": "Email reads are non-destructive."}
         if policy in {"READ", "LOW_RISK"}:
             return {"status": "allowed", "reason": "Policy permits automatic execution."}
         if tool_name == "file_system" and args.get("action") == "read":
