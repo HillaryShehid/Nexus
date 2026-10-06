@@ -53,6 +53,14 @@ class PermissionSystem:
             return {"status": "allowed", "reason": "Policy permits automatic execution."}
         if tool_name == "file_system" and args.get("action") == "read":
             return {"status": "allowed", "reason": "Filesystem reads are non-destructive."}
+        if policy in {"ELEVATION_REQUIRED", "UNTRUSTED_RUNNER"}:
+            # Authorization establishes that the actor may request the action;
+            # the separate approval gate in NexusBrain must still obtain
+            # explicit confirmation before execution.
+            return {
+                "status": "approval_required",
+                "reason": "Explicit owner approval is required before execution.",
+            }
         if actor_id is None:
             return {"status": "blocked", "reason": "Authenticated owner context is required."}
         return {"status": "blocked", "reason": "Unknown permission policy; fail closed."}
