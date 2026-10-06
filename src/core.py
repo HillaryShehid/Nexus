@@ -16,6 +16,7 @@ from src.events import EventStore, NexusEvent
 from src.autonomy import AutonomyEngine, AutonomyScheduler
 from src.world_state import WorldStateStore
 from src.roles import NexusRole, RoleRouter
+from src.identity import DEFAULT_OWNER, NexusOwnerIdentity
 
 logger = logging.getLogger("nexus.core")
 MAX_USER_INPUT = 8000
@@ -35,6 +36,7 @@ class NexusCore:
         self.tasks = TaskManager()
         self.health = NexusHealth()
         self.personal = PersonalNexusRuntime(owner_id=actor_id)
+        self.owner_identity: NexusOwnerIdentity = DEFAULT_OWNER
         self.notifications = NotificationCenter()
 
         self.world = WorldStateStore()
@@ -61,6 +63,13 @@ class NexusCore:
 
     def health_check(self):
         return self.health.run()
+
+    def owner_profile(self):
+        """Return the non-sensitive owner identity Nexus carries with the project."""
+        return self.owner_identity.to_dict()
+
+    def owner_summary(self):
+        return self.owner_identity.summary
 
     def improve_nexus(self, objective, relative_paths=None):
         return self.brain.improve(objective, relative_paths)
