@@ -39,14 +39,19 @@ class PermissionSystem:
             return {"status": "blocked", "reason": "Requested action is not permitted."}
 
         policy = spec["policy"]
-        if policy in {"ELEVATION_REQUIRED", "UNTRUSTED_RUNNER"}:
-            if actor_id is None:
-                return {"status": "approval_required", "reason": "Explicit owner approval is required."}
-            actor = self.authorization.get_user(actor_id)
-            if actor is None or not actor.active:
-                return {"status": "blocked", "reason": "Unknown or inactive user."}
-            if not self.authorization.can(actor_id, tool_name):
-                return {"status": "blocked", "reason": "Owner authorization is required for this action."}
+
+        # Every tool action requires an authenticated active Nexus user.
+        # Authorization and explicit approval are separate gates.
+        if actor_id is None:
+            return {"status": "blocked", "reason": "Authenticated owner context is required."}
+
+        actor = self.authorization.get_user(actor_id)
+        if actor is None or not actor.active:
+            return {"status": "blocked", "reason": "Unknown or inactive user."}
+
+        if not self.authorization.can(actor_id, tool_name):
+            return {"status": "blocked", "reason": "Owner authorization is required for this action."}
+
         if tool_name == "email" and args.get("action") in {"read", "search"}:
             return {"status": "allowed", "reason": "Email reads are non-destructive."}
         if policy in {"READ", "LOW_RISK"}:
