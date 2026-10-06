@@ -11,7 +11,8 @@ from src.brain.executor import ParallelActionExecutor
 from src.brain.experiments import SelfImprovementExperiments
 from src.brain.goals import GoalManager
 from src.brain.identity import NexusIdentity
-from src.brain.memory import CognitiveMemory\nfrom src.brain.local_memory_store import LocalMemoryStore
+from src.brain.memory import CognitiveMemory
+from src.brain.local_memory_store import LocalMemoryStore
 from src.brain.self_evaluation import SelfEvaluation
 from src.brain.self_improvement_loop import SelfImprovementLoop
 from src.brain.self_improvement import SelfImprovementEngine
