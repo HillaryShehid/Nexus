@@ -1,10 +1,12 @@
 """Local development API for the personal Nexus brain and Realtime voice bridge."""
 
+import ipaddress
 import json
 import logging
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from hmac import compare_digest
 from urllib.parse import urlparse
 
 from src.core import NexusCore
@@ -15,6 +17,27 @@ WEB_ROOT = Path(__file__).parent / "web"
 MAX_BODY = 16_000
 MAX_VOICE_REQUEST = 8_000
 NEXUS_API_TOKEN = os.getenv("NEXUS_API_TOKEN", "")
+
+
+def _is_loopback_host(host):
+    normalized = str(host).strip().lower()
+    if normalized in {"localhost", "127.0.0.1", "::1"}:
+        return True
+    try:
+        return ipaddress.ip_address(normalized).is_loopback
+    except ValueError:
+        # Hostnames are treated conservatively: a non-IP bind is remote-capable.
+        return False
+
+
+REMOTE_BIND = not _is_loopback_host(HOST)
+MIN_API_TOKEN_LENGTH = 32
+
+if REMOTE_BIND and len(NEXUS_API_TOKEN) < MIN_API_TOKEN_LENGTH:
+    raise RuntimeError(
+        "Unsafe Nexus server configuration: non-loopback HOST requires "
+        f"NEXUS_API_TOKEN with at least {MIN_API_TOKEN_LENGTH} characters."
+    )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -33,8 +56,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def _authorized(self):
         if not NEXUS_API_TOKEN:
-            return True
-        return self.headers.get("Authorization") == "Bearer " + NEXUS_API_TOKEN
+            return not REMOTE_BIND
+        supplied = self.headers.get("Authorization", "")
+        expected = "Bearer " + NEXUS_API_TOKEN
+        return compare_digest(supplied, expected)
 
     def _read_json(self):
         try:
@@ -99,6 +124,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
         if path == "/api/livekit/token":
+            if not self._authorized():
+                self._json(401, {"error": "Unauthorized"})
+                return
             try:
                 livekit_url = os.getenv("LIVEKIT_URL", "")
                 api_key = os.getenv("LIVEKIT_API_KEY", "")

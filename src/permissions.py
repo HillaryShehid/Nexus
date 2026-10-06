@@ -39,20 +39,54 @@ class PermissionSystem:
             return {"status": "blocked", "reason": "Requested action is not permitted."}
 
         policy = spec["policy"]
+
+        # Elevation is a two-stage gate. An elevated tool can enter the
+        # approval flow even before an actor is attached, but it can never
+        # execute without the explicit approval handled by NexusBrain.
         if policy in {"ELEVATION_REQUIRED", "UNTRUSTED_RUNNER"}:
             if actor_id is None:
-                return {"status": "approval_required", "reason": "Explicit owner approval is required."}
+                return {
+                    "status": "approval_required",
+                    "reason": "Explicit owner approval is required.",
+                }
             actor = self.authorization.get_user(actor_id)
             if actor is None or not actor.active:
                 return {"status": "blocked", "reason": "Unknown or inactive user."}
             if not self.authorization.can(actor_id, tool_name):
-                return {"status": "blocked", "reason": "Owner authorization is required for this action."}
+                return {
+                    "status": "blocked",
+                    "reason": "Owner authorization is required for this action.",
+                }
+            return {
+                "status": "approval_required",
+                "reason": "Explicit owner approval is required before execution.",
+            }
+
+        # Non-elevated tools still require an authenticated active Nexus user.
+        if actor_id is None:
+            return {"status": "blocked", "reason": "Authenticated owner context is required."}
+
+        actor = self.authorization.get_user(actor_id)
+        if actor is None or not actor.active:
+            return {"status": "blocked", "reason": "Unknown or inactive user."}
+
+        if not self.authorization.can(actor_id, tool_name):
+            return {"status": "blocked", "reason": "Owner authorization is required for this action."}
+
         if tool_name == "email" and args.get("action") in {"read", "search"}:
             return {"status": "allowed", "reason": "Email reads are non-destructive."}
         if policy in {"READ", "LOW_RISK"}:
             return {"status": "allowed", "reason": "Policy permits automatic execution."}
         if tool_name == "file_system" and args.get("action") == "read":
             return {"status": "allowed", "reason": "Filesystem reads are non-destructive."}
+        if policy in {"ELEVATION_REQUIRED", "UNTRUSTED_RUNNER"}:
+            # Authorization establishes that the actor may request the action;
+            # the separate approval gate in NexusBrain must still obtain
+            # explicit confirmation before execution.
+            return {
+                "status": "approval_required",
+                "reason": "Explicit owner approval is required before execution.",
+            }
         if actor_id is None:
             return {"status": "blocked", "reason": "Authenticated owner context is required."}
         return {"status": "blocked", "reason": "Unknown permission policy; fail closed."}

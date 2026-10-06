@@ -9,6 +9,7 @@ import math
 import operator
 import os
 import signal
+import shutil
 import socket
 import subprocess
 import sys
@@ -369,19 +370,117 @@ class ToolSystem:
         }
 
     def tool_code_tester(self, python_code):
+        """Execute untrusted Python only inside a restricted Docker sandbox.
+
+        The host Python interpreter is never used for submitted code. Docker
+        provides filesystem, network, process, memory, CPU, and capability
+        isolation; the source file is mounted read-only and the container
+        root filesystem is read-only.
+        """
+        docker = shutil.which("docker")
+        if not docker:
+            return {
+                "success": False,
+                "result": "",
+                "error": (
+                    "Untrusted Runner Error: Docker is required for the "
+                    "code sandbox and was not found."
+                ),
+            }
+
+        image = os.getenv(
+            "NEXUS_CODE_SANDBOX_IMAGE",
+            "python:3.12-alpine",
+        )
+
         with tempfile.TemporaryDirectory(prefix="nexus_runner_") as tmpdir:
             code_path = os.path.join(tmpdir, "sandbox.py")
             try:
-                with open(code_path, "w", encoding="utf-8") as handle: handle.write(python_code)
-                process = subprocess.Popen([sys.executable, "-I", code_path], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env={}, cwd=tmpdir, text=True, start_new_session=(os.name != "nt"), creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
-                try: stdout, stderr = process.communicate(timeout=3)
+                with open(code_path, "w", encoding="utf-8") as handle:
+                    handle.write(python_code)
+
+                command = [
+                    docker,
+                    "run",
+                    "--rm",
+                    "--network", "none",
+                    "--read-only",
+                    "--cpus", "0.5",
+                    "--memory", "128m",
+                    "--memory-swap", "128m",
+                    "--pids-limit", "32",
+                    "--cap-drop", "ALL",
+                    "--security-opt", "no-new-privileges=true",
+                    "--tmpfs", "/tmp:rw,noexec,nosuid,nodev,size=16m",
+                    "--mount",
+                    f"type=bind,source={code_path},target=/sandbox/sandbox.py,readonly",
+                    "--workdir", "/sandbox",
+                    "--user", "65532:65532",
+                    image,
+                    "python",
+                    "/sandbox/sandbox.py",
+                ]
+
+                process = subprocess.Popen(
+                    command,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    start_new_session=(os.name != "nt"),
+                    creationflags=getattr(
+                        subprocess,
+                        "CREATE_NEW_PROCESS_GROUP",
+                        0,
+                    ),
+                )
+                try:
+                    stdout, stderr = process.communicate(timeout=3)
                 except subprocess.TimeoutExpired:
-                    self._terminate_process(process); process.communicate(timeout=1)
-                    return {"success": False, "result": "", "error": "Untrusted Runner Error: Execution exceeded 3 seconds."}
-                stdout, stderr = (stdout or "")[:MAX_RUNNER_OUTPUT], (stderr or "")[:MAX_RUNNER_OUTPUT]
-                payload = {"status": "success" if process.returncode == 0 else "failed", "returncode": process.returncode, "stdout": stdout, "stderr": stderr}
-                if process.returncode == 0: return {"success": True, "result": json.dumps(payload), "error": None}
-                return {"success": False, "result": json.dumps(payload), "error": "Untrusted Runner Error: Test process returned a failure code."}
+                    self._terminate_process(process)
+                    try:
+                        process.communicate(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.communicate()
+                    return {
+                        "success": False,
+                        "result": "",
+                        "error": "Untrusted Runner Error: Execution exceeded 3 seconds.",
+                    }
+
+                stdout = (stdout or "")[:MAX_RUNNER_OUTPUT]
+                stderr = (stderr or "")[:MAX_RUNNER_OUTPUT]
+                payload = {
+                    "status": "success" if process.returncode == 0 else "failed",
+                    "returncode": process.returncode,
+                    "stdout": stdout,
+                    "stderr": stderr,
+                    "sandbox": "docker",
+                }
+
+                if process.returncode == 0:
+                    return {
+                        "success": True,
+                        "result": json.dumps(payload),
+                        "error": None,
+                    }
+
+                return {
+                    "success": False,
+                    "result": json.dumps(payload),
+                    "error": (
+                        "Untrusted Runner Error: Sandboxed test process "
+                        "returned a failure code."
+                    ),
+                }
             except (OSError, subprocess.SubprocessError):
-                logger.exception("Untrusted runner failure.")
-                return {"success": False, "result": "", "error": "Untrusted Runner Error: Unable to execute test process."}
+                logger.exception("Docker sandbox failure.")
+                return {
+                    "success": False,
+                    "result": "",
+                    "error": (
+                        "Untrusted Runner Error: Docker sandbox could not "
+                        "start safely."
+                    ),
+                }
