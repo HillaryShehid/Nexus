@@ -1,4 +1,3 @@
-import os
 from unittest.mock import patch
 
 from src.model import AIBrain
@@ -26,7 +25,7 @@ def test_elevated_tools_route_to_explicit_approval():
     )["status"] == "approval_required"
 
 
-def test_elevated_tools_still_fail_closed_without_actor():
+def test_elevated_tools_require_explicit_approval_without_actor():
     permissions = PermissionSystem()
 
     assert permissions.evaluate_clearance(
