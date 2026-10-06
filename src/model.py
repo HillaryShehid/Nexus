@@ -268,6 +268,29 @@ class AIBrain:
         content = response.choices[0].message.content
         return content if isinstance(content, str) else ""
 
+    def _resolve_model(self, provider: str, profile: str, primary_provider: str) -> str:
+        """Resolve a model without leaking one provider's model into another.
+
+        Provider-specific profile overrides win. The older generic
+        NEXUS_<PROFILE>_MODEL override is honored only for the primary
+        provider selected for this request, so a fallback provider always
+        receives its own compatible model.
+        """
+        provider_profile = os.getenv(
+            f"NEXUS_{provider.upper()}_{profile.upper()}_MODEL"
+        )
+        if provider_profile:
+            return provider_profile
+
+        if provider == primary_provider:
+            legacy_profile = os.getenv(
+                f"NEXUS_{profile.upper()}_MODEL"
+            )
+            if legacy_profile:
+                return legacy_profile
+
+        return self.provider_models[provider]
+
     def _generate_with_provider(
         self,
         provider: str,
@@ -275,11 +298,9 @@ class AIBrain:
         system_prompt: str,
         user_prompt: str,
         json_mode: bool,
+        primary_provider: str,
     ) -> tuple[str, str]:
-        model = os.getenv(
-            f"NEXUS_{profile.upper()}_MODEL",
-            self.provider_models[provider],
-        )
+        model = self._resolve_model(provider, profile, primary_provider)
         max_tokens = self.max_tokens.get(profile, 512)
 
         if provider == "gemini":
@@ -323,7 +344,15 @@ class AIBrain:
             profile = "normal"
 
         errors = []
-        providers = list(self.provider_order)
+        primary_provider = self._provider_for_profile(profile)
+        providers = [
+            primary_provider,
+            *(
+                provider
+                for provider in self.provider_order
+                if provider != primary_provider
+            ),
+        ]
 
         for provider in providers:
             if not self._available(provider):
@@ -336,6 +365,7 @@ class AIBrain:
                     system_prompt,
                     user_prompt,
                     json_mode,
+                    primary_provider,
                 )
 
                 if not content.strip():
