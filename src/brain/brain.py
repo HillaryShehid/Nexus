@@ -720,11 +720,7 @@ class NexusBrain:
 
         response = self.model.generate(
             system,
-            f"Original request:
-{state.request}
-
-Evidence:
-{evidence}",
+            f"Original request:\n{state.request}\n\nEvidence:\n{evidence}",
             profile=route.profile,
         )
 
