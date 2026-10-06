@@ -40,8 +40,29 @@ class PermissionSystem:
 
         policy = spec["policy"]
 
-        # Every tool action requires an authenticated active Nexus user.
-        # Authorization and explicit approval are separate gates.
+        # Elevation is a two-stage gate. An elevated tool can enter the
+        # approval flow even before an actor is attached, but it can never
+        # execute without the explicit approval handled by NexusBrain.
+        if policy in {"ELEVATION_REQUIRED", "UNTRUSTED_RUNNER"}:
+            if actor_id is None:
+                return {
+                    "status": "approval_required",
+                    "reason": "Explicit owner approval is required.",
+                }
+            actor = self.authorization.get_user(actor_id)
+            if actor is None or not actor.active:
+                return {"status": "blocked", "reason": "Unknown or inactive user."}
+            if not self.authorization.can(actor_id, tool_name):
+                return {
+                    "status": "blocked",
+                    "reason": "Owner authorization is required for this action.",
+                }
+            return {
+                "status": "approval_required",
+                "reason": "Explicit owner approval is required before execution.",
+            }
+
+        # Non-elevated tools still require an authenticated active Nexus user.
         if actor_id is None:
             return {"status": "blocked", "reason": "Authenticated owner context is required."}
 
