@@ -25,15 +25,18 @@ def test_elevated_tools_route_to_explicit_approval():
     )["status"] == "approval_required"
 
 
-def test_tools_fail_closed_without_authenticated_owner():
+def test_elevated_tools_enter_approval_flow_without_actor():
     permissions = PermissionSystem()
 
-    result = permissions.evaluate_clearance(
+    assert permissions.evaluate_clearance(
         "file_system",
         {"action": "write", "path": "example.txt", "content": "hello"},
-    )
-    assert result["status"] == "blocked"
-    assert "Authenticated owner" in result["reason"]
+    )["status"] == "approval_required"
+
+    assert permissions.evaluate_clearance(
+        "code_tester",
+        {"python_code": "print('hello')"},
+    )["status"] == "approval_required"
 
 
 def test_provider_fallback_never_reuses_primary_provider_model(monkeypatch):
