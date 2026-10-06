@@ -38,7 +38,7 @@ class AIBrain:
         self.mode = os.getenv("NEXUS_MODEL_MODE", "free").lower()
         configured = os.getenv(
             "NEXUS_PROVIDER_ORDER",
-            "gemini,groq,openrouter,ollama",
+            "gemini,groq,openrouter,mistral,cloudflare,nvidia,cohere,huggingface,ollama",
         )
         self.provider_order = tuple(
             item.strip().lower()
@@ -125,7 +125,30 @@ class AIBrain:
                 },
             )
 
-        simple_compatible = {\n            "mistral": ("MISTRAL_API_KEY", "https://api.mistral.ai/v1"),\n            "nvidia": ("NVIDIA_API_KEY", "https://integrate.api.nvidia.com/v1"),\n            "cohere": ("COHERE_API_KEY", "https://api.cohere.com/compatibility/v1"),\n            "huggingface": ("HUGGINGFACE_API_KEY", "https://router.huggingface.co/v1"),\n        }\n        for provider, (key_name, base_url) in simple_compatible.items():\n            api_key = os.getenv(key_name)\n            if api_key:\n                self.clients[provider] = OpenAI(api_key=api_key, base_url=base_url)\n\n        cloudflare_key = os.getenv("CLOUDFLARE_API_TOKEN")\n        cloudflare_account = os.getenv("CLOUDFLARE_ACCOUNT_ID")\n        if cloudflare_key and cloudflare_account:\n            self.clients["cloudflare"] = OpenAI(\n                api_key=cloudflare_key,\n                base_url=(\n                    "https://api.cloudflare.com/client/v4/accounts/"\n                    + cloudflare_account\n                    + "/ai/v1"\n                ),\n            )\n\n        ollama_url = os.getenv(
+        simple_compatible = {
+            "mistral": ("MISTRAL_API_KEY", "https://api.mistral.ai/v1"),
+            "nvidia": ("NVIDIA_API_KEY", "https://integrate.api.nvidia.com/v1"),
+            "cohere": ("COHERE_API_KEY", "https://api.cohere.com/compatibility/v1"),
+            "huggingface": ("HUGGINGFACE_API_KEY", "https://router.huggingface.co/v1"),
+        }
+        for provider, (key_name, base_url) in simple_compatible.items():
+            api_key = os.getenv(key_name)
+            if api_key:
+                self.clients[provider] = OpenAI(api_key=api_key, base_url=base_url)
+
+        cloudflare_key = os.getenv("CLOUDFLARE_API_TOKEN")
+        cloudflare_account = os.getenv("CLOUDFLARE_ACCOUNT_ID")
+        if cloudflare_key and cloudflare_account:
+            self.clients["cloudflare"] = OpenAI(
+                api_key=cloudflare_key,
+                base_url=(
+                    "https://api.cloudflare.com/client/v4/accounts/"
+                    + cloudflare_account
+                    + "/ai/v1"
+                ),
+            )
+
+        ollama_url = os.getenv(
             "NEXUS_OLLAMA_URL",
             "http://localhost:11434/v1",
         )
