@@ -4,6 +4,7 @@ import ipaddress
 import json
 import logging
 import os
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from hmac import compare_digest
@@ -17,6 +18,9 @@ WEB_ROOT = Path(__file__).parent / "web"
 MAX_BODY = 16_000
 MAX_VOICE_REQUEST = 8_000
 NEXUS_API_TOKEN = os.getenv("NEXUS_API_TOKEN", "")
+
+_nexus = None
+_nexus_lock = threading.Lock()
 
 
 def _is_loopback_host(host):
@@ -43,7 +47,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 
 
 class Handler(BaseHTTPRequestHandler):
-    nexus = None
 
     def _json(self, status, payload):
         body = json.dumps(payload).encode("utf-8")
@@ -74,9 +77,13 @@ class Handler(BaseHTTPRequestHandler):
         return payload
 
     def _get_nexus(self):
-        if self.nexus is None:
-            self.nexus = NexusCore(actor_id="hilal")
-        return self.nexus
+        global _nexus
+        if _nexus is None:
+            with _nexus_lock:
+                if _nexus is None:
+                    logging.info("Initializing the persistent Personal Nexus brain.")
+                    _nexus = NexusCore(actor_id="hilal")
+        return _nexus
 
     def do_GET(self):
         path = urlparse(self.path).path
@@ -202,6 +209,45 @@ class Handler(BaseHTTPRequestHandler):
                     )
                 },
             )
+            return
+
+        if path == "/api/chat/stream":
+            if not self._authorized():
+                self._json(401, {"error": "Unauthorized"})
+                return
+            try:
+                payload = self._read_json()
+                message = payload.get("message")
+                if not isinstance(message, str) or not message.strip():
+                    self._json(400, {"error": "message must be non-empty text"})
+                    return
+                if len(message) > 8000:
+                    self._json(413, {"error": "Message exceeds Nexus input limit"})
+                    return
+
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.send_header("Connection", "keep-alive")
+                self.send_header("X-Accel-Buffering", "no")
+                self.end_headers()
+
+                for chunk in self._get_nexus().stream_quick_request(message):
+                    event = json.dumps({"delta": chunk}, ensure_ascii=False)
+                    self.wfile.write(f"data: {event}\\n\\n".encode("utf-8"))
+                    self.wfile.flush()
+                self.wfile.write(b"data: {"done":true}\\n\\n")
+                self.wfile.flush()
+            except ValueError as exc:
+                self._json(400, {"error": str(exc)})
+            except Exception:
+                logging.exception("Nexus streaming request failed.")
+                try:
+                    event = json.dumps({"error": "Nexus stopped safely after an internal error."})
+                    self.wfile.write(f"data: {event}\\n\\n".encode("utf-8"))
+                    self.wfile.flush()
+                except Exception:
+                    pass
             return
 
         if path != "/api/chat":

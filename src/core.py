@@ -100,6 +100,19 @@ class NexusCore:
     def role_profile(self, role: str):
         return RoleRouter.profile(NexusRole(role))
 
+    def stream_quick_request(self, user_input):
+        """Stream lightweight Personal Nexus chat without invoking business Core flows."""
+        if not isinstance(user_input, str):
+            yield "I need the request as text."
+            return
+        if len(user_input) > MAX_USER_INPUT:
+            yield f"System limitation: the prompt is longer than the {MAX_USER_INPUT}-character limit."
+            return
+        if not user_input.strip():
+            yield "Tell me what you want me to do."
+            return
+        yield from self.brain.stream_quick_conversation(user_input)
+
     def handle_request(self, user_input):
         if not isinstance(user_input, str):
             return "I need the request as text."

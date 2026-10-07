@@ -36,21 +36,56 @@ async function checkHealth() {
 }
 
 async function sendMessage(text) {
-  const pending = addMessage('Nexus', 'Thinking…');
+  const pending = addMessage('Nexus', '');
   try {
-    const response = await fetch('/api/chat', {
+    const response = await fetch('/api/chat/stream', {
       method: 'POST',
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
       body: JSON.stringify({ message: text }),
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Request failed');
-    pending.lastChild.textContent = data.response || 'No response received.';
+
+    if (!response.ok) {
+      let message = 'Request failed';
+      try {
+        const data = await response.json();
+        message = data.error || message;
+      } catch {}
+      throw new Error(message);
+    }
+
+    if (!response.body) throw new Error('Streaming is not supported by this browser.');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const events = buffer.split('\\n\\n');
+      buffer = events.pop() || '';
+      for (const event of events) {
+        const line = event.split('\\n').find((item) => item.startsWith('data: '));
+        if (!line) continue;
+        const data = JSON.parse(line.slice(6));
+        if (data.error) throw new Error(data.error);
+        if (data.delta) {
+          pending.lastChild.textContent += data.delta;
+          messages.scrollTop = messages.scrollHeight;
+        }
+      }
+    }
+
+    if (!pending.lastChild.textContent) {
+      pending.lastChild.textContent = 'No response received.';
+    }
   } catch (error) {
     pending.lastChild.textContent = error.message === 'Unauthorized'
       ? 'Nexus is private. Check the local access settings.'
-      : 'I could not reach the Nexus brain. Check the local backend connection.';
+      : error.message || 'I could not reach the Nexus brain.';
     console.error(error);
   }
 }
