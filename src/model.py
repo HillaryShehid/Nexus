@@ -93,6 +93,9 @@ class AIBrain:
             for profile in ("quick", "normal", "deep", "coding", "research")
         }
 
+        self.request_timeout = float(os.getenv("NEXUS_PROVIDER_TIMEOUT_SECONDS", "12"))
+        self.max_provider_attempts = int(os.getenv("NEXUS_MAX_PROVIDER_ATTEMPTS", "2"))
+
         self.max_tokens = {
             "quick": int(os.getenv("NEXUS_QUICK_MAX_TOKENS", "192")),
             "normal": int(os.getenv("NEXUS_NORMAL_MAX_TOKENS", "512")),
@@ -109,6 +112,8 @@ class AIBrain:
             self.clients["groq"] = OpenAI(
                 api_key=groq_key,
                 base_url="https://api.groq.com/openai/v1",
+                timeout=self.request_timeout,
+                max_retries=0,
             )
 
         openrouter_key = os.getenv("OPENROUTER_API_KEY")
@@ -123,6 +128,8 @@ class AIBrain:
                     ),
                     "X-Title": "Nexus Personal AI",
                 },
+                timeout=self.request_timeout,
+                max_retries=0,
             )
 
         simple_compatible = {
@@ -134,7 +141,12 @@ class AIBrain:
         for provider, (key_name, base_url) in simple_compatible.items():
             api_key = os.getenv(key_name)
             if api_key:
-                self.clients[provider] = OpenAI(api_key=api_key, base_url=base_url)
+                self.clients[provider] = OpenAI(
+                    api_key=api_key,
+                    base_url=base_url,
+                    timeout=self.request_timeout,
+                    max_retries=0,
+                )
 
         cloudflare_key = os.getenv("CLOUDFLARE_API_TOKEN")
         cloudflare_account = os.getenv("CLOUDFLARE_ACCOUNT_ID")
@@ -146,6 +158,8 @@ class AIBrain:
                     + cloudflare_account
                     + "/ai/v1"
                 ),
+                timeout=self.request_timeout,
+                max_retries=0,
             )
 
         ollama_url = os.getenv(
@@ -155,6 +169,8 @@ class AIBrain:
         self.clients["ollama"] = OpenAI(
             base_url=ollama_url,
             api_key=os.getenv("NEXUS_OLLAMA_API_KEY", "ollama"),
+            timeout=self.request_timeout,
+            max_retries=0,
         )
 
     def _available(self, provider: str) -> bool:
@@ -221,7 +237,7 @@ class AIBrain:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=60) as response:
+            with urllib.request.urlopen(request, timeout=self.request_timeout) as response:
                 payload = json.loads(
                     response.read().decode("utf-8")
                 )
@@ -353,12 +369,16 @@ class AIBrain:
                 if provider != primary_provider
             ),
         ]
+        attempts = 0
 
         for provider in providers:
+            if attempts >= self.max_provider_attempts:
+                break
             if not self._available(provider):
                 continue
 
             try:
+                attempts += 1
                 content, model = self._generate_with_provider(
                     provider,
                     profile,
@@ -385,8 +405,10 @@ class AIBrain:
                 }
             except Exception as exc:
                 logger.warning(
-                    "Nexus provider %s failed; trying the next provider.",
+                    "Nexus provider %s failed on attempt %d/%d; trying the next provider.",
                     provider,
+                    attempts,
+                    self.max_provider_attempts,
                 )
                 errors.append({
                     "provider": provider,
