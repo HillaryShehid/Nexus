@@ -4,6 +4,7 @@ import ipaddress
 import json
 import logging
 import os
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from hmac import compare_digest
@@ -17,6 +18,9 @@ WEB_ROOT = Path(__file__).parent / "web"
 MAX_BODY = 16_000
 MAX_VOICE_REQUEST = 8_000
 NEXUS_API_TOKEN = os.getenv("NEXUS_API_TOKEN", "")
+
+_nexus = None
+_nexus_lock = threading.Lock()
 
 
 def _is_loopback_host(host):
@@ -43,7 +47,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 
 
 class Handler(BaseHTTPRequestHandler):
-    nexus = None
 
     def _json(self, status, payload):
         body = json.dumps(payload).encode("utf-8")
@@ -74,9 +77,13 @@ class Handler(BaseHTTPRequestHandler):
         return payload
 
     def _get_nexus(self):
-        if self.nexus is None:
-            self.nexus = NexusCore(actor_id="hilal")
-        return self.nexus
+        global _nexus
+        if _nexus is None:
+            with _nexus_lock:
+                if _nexus is None:
+                    logging.info("Initializing the persistent Personal Nexus brain.")
+                    _nexus = NexusCore(actor_id="hilal")
+        return _nexus
 
     def do_GET(self):
         path = urlparse(self.path).path
