@@ -211,6 +211,45 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
 
+        if path == "/api/chat/stream":
+            if not self._authorized():
+                self._json(401, {"error": "Unauthorized"})
+                return
+            try:
+                payload = self._read_json()
+                message = payload.get("message")
+                if not isinstance(message, str) or not message.strip():
+                    self._json(400, {"error": "message must be non-empty text"})
+                    return
+                if len(message) > 8000:
+                    self._json(413, {"error": "Message exceeds Nexus input limit"})
+                    return
+
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.send_header("Connection", "keep-alive")
+                self.send_header("X-Accel-Buffering", "no")
+                self.end_headers()
+
+                for chunk in self._get_nexus().stream_quick_request(message):
+                    event = json.dumps({"delta": chunk}, ensure_ascii=False)
+                    self.wfile.write(f"data: {event}\\n\\n".encode("utf-8"))
+                    self.wfile.flush()
+                self.wfile.write(b"data: {"done":true}\\n\\n")
+                self.wfile.flush()
+            except ValueError as exc:
+                self._json(400, {"error": str(exc)})
+            except Exception:
+                logging.exception("Nexus streaming request failed.")
+                try:
+                    event = json.dumps({"error": "Nexus stopped safely after an internal error."})
+                    self.wfile.write(f"data: {event}\\n\\n".encode("utf-8"))
+                    self.wfile.flush()
+                except Exception:
+                    pass
+            return
+
         if path != "/api/chat":
             self._json(404, {"error": "Not found"})
             return
