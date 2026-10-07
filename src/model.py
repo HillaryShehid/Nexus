@@ -339,6 +339,100 @@ class AIBrain:
 
         return content, model
 
+    def _stream_gemini(self, model: str, system_prompt: str, user_prompt: str, max_tokens: int):
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            + model
+            + ":streamGenerateContent?alt=sse&key="
+            + self.gemini_api_key
+        )
+        body = {
+            "system_instruction": {"parts": [{"text": system_prompt}]},
+            "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
+            "generationConfig": {"maxOutputTokens": max_tokens},
+        }
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=self.request_timeout) as response:
+            for raw_line in response:
+                line = raw_line.decode("utf-8", errors="replace").strip()
+                if not line.startswith("data:"):
+                    continue
+                payload = json.loads(line[5:].strip())
+                for part in (payload.get("candidates") or [{}])[0].get("content", {}).get("parts", []):
+                    text = part.get("text", "")
+                    if text:
+                        yield text
+
+    def _stream_openai_compatible(self, provider: str, model: str, system_prompt: str, user_prompt: str, max_tokens: int):
+        stream = self.clients[provider].chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens=max_tokens,
+            stream=True,
+        )
+        for chunk in stream:
+            choices = getattr(chunk, "choices", None) or []
+            if not choices:
+                continue
+            delta = getattr(choices[0], "delta", None)
+            text = getattr(delta, "content", None) if delta else None
+            if text:
+                yield text
+
+    def generate_stream(self, system_prompt: str, user_prompt: str, profile: str = "quick"):
+        """Stream model text for lightweight Personal Nexus chat."""
+        if not isinstance(system_prompt, str) or not isinstance(user_prompt, str):
+            raise ValueError("Model input must be text.")
+        if profile not in self.max_tokens:
+            profile = "quick"
+
+        primary_provider = self._provider_for_profile(profile)
+        providers = [
+            primary_provider,
+            *(provider for provider in self.provider_order if provider != primary_provider),
+        ]
+        attempts = 0
+        last_error = None
+
+        for provider in providers:
+            if attempts >= self.max_provider_attempts or not self._available(provider):
+                continue
+            attempts += 1
+            model = self._resolve_model(provider, profile, primary_provider)
+            try:
+                stream = (
+                    self._stream_gemini(model, system_prompt, user_prompt, self.max_tokens[profile])
+                    if provider == "gemini"
+                    else self._stream_openai_compatible(
+                        provider, model, system_prompt, user_prompt, self.max_tokens[profile]
+                    )
+                )
+                yielded = False
+                for chunk in stream:
+                    yielded = True
+                    yield {"type": "delta", "content": chunk, "provider": provider, "model": model}
+                if yielded:
+                    yield {"type": "done", "provider": provider, "model": model}
+                    return
+                raise RuntimeError("Provider returned empty output.")
+            except Exception as exc:
+                last_error = exc
+                logger.warning(
+                    "Nexus streaming provider %s failed on attempt %d/%d.",
+                    provider, attempts, self.max_provider_attempts,
+                )
+                continue
+
+        raise RuntimeError("No configured Nexus model provider could stream the request safely.") from last_error
+
     def generate(
         self,
         system_prompt: str,
