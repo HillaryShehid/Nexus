@@ -143,6 +143,9 @@ class NexusBrain:
             return self._quick_conversation(request, started_at, on_chunk=on_chunk)
 
         memory = self.memory.read_context()
+        daily_context = self.daily_log.relevant_context(request)
+        if daily_context:
+            memory = memory + "\n\nRelevant verified daily-log history:\n" + daily_context[:3000]
         lessons = self.learning.retrieve_lessons()
         brief = self.executive.brief(request, memory, lessons, route)
 
