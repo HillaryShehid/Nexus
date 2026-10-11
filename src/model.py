@@ -442,7 +442,7 @@ class AIBrain:
                     system_prompt,
                     user_prompt,
                     json_mode,
-                    on_chunk=on_chunk,
+                    on_chunk=emit_chunk if on_chunk is not None else None,
                 )
 
                 if not content.strip():
