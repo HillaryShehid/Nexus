@@ -143,7 +143,8 @@ class NexusBrain:
             return self._quick_conversation(request, started_at, on_chunk=on_chunk)
 
         memory = self.memory.read_context()
-        daily_context = self.daily_log.relevant_context(request)
+        daily_log = getattr(self, "daily_log", None)
+        daily_context = daily_log.relevant_context(request) if daily_log is not None else ""
         if daily_context:
             memory = memory + "\n\nRelevant verified daily-log history:\n" + daily_context[:3000]
         lessons = self.learning.retrieve_lessons()
@@ -468,10 +469,12 @@ class NexusBrain:
         except Exception as exc:
             logger.warning("Conversation persistence unavailable (%s).", type(exc).__name__)
         try:
-            self.daily_log.record_run(
-                request=request, status=status, route="quick",
-                completed_steps=[], failures=[] if result.get("success") else [{"category": "model_runtime"}],
-            )
+            daily_log = getattr(self, "daily_log", None)
+            if daily_log is not None:
+                daily_log.record_run(
+                    request=request, status=status, route="quick",
+                    completed_steps=[], failures=[] if result.get("success") else [{"category": "model_runtime"}],
+                )
         except Exception as exc:
             logger.warning("Daily log write unavailable (%s).", type(exc).__name__)
 
@@ -715,7 +718,8 @@ class NexusBrain:
             return []
 
     def _finish(self, state, brief, route, run_metrics=None, started_at=None):
-        daily_context = self.daily_log.relevant_context(state.request)
+        daily_log = getattr(self, "daily_log", None)
+        daily_context = daily_log.relevant_context(state.request) if daily_log is not None else ""
         evidence = json.dumps(
             {
                 "goal": state.goal,
@@ -833,13 +837,15 @@ class NexusBrain:
         except Exception as exc:
             logger.warning("Conversation persistence unavailable (%s).", type(exc).__name__)
         try:
-            self.daily_log.record_run(
-                request=state.request,
-                status=state.status,
-                route=route.name,
-                completed_steps=state.completed_steps,
-                failures=state.failures,
-            )
+            daily_log = getattr(self, "daily_log", None)
+            if daily_log is not None:
+                daily_log.record_run(
+                    request=state.request,
+                    status=state.status,
+                    route=route.name,
+                    completed_steps=state.completed_steps,
+                    failures=state.failures,
+                )
         except Exception as exc:
             logger.warning("Daily log write unavailable (%s).", type(exc).__name__)
 
