@@ -38,7 +38,7 @@ class AIBrain:
         self.mode = os.getenv("NEXUS_MODEL_MODE", "free").lower()
         configured = os.getenv(
             "NEXUS_PROVIDER_ORDER",
-            "gemini,groq,openrouter,mistral,cloudflare,nvidia,cohere,huggingface,ollama",
+            "gemini,groq,openrouter,mistral,cloudflare,nvidia,cohere,huggingface",
         )
         self.provider_order = tuple(
             item.strip().lower()
@@ -64,7 +64,7 @@ class AIBrain:
             self.provider_order = tuple(
                 provider
                 for provider in self.provider_order
-                if provider in FREE_PROVIDER_ORDER or provider == "ollama"
+                if provider in FREE_PROVIDER_ORDER
             )
 
         if not self.provider_order:
