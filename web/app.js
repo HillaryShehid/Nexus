@@ -61,11 +61,11 @@ async function sendMessage(text) {
       const { value, done } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split('\\n\\n');
+      const events = buffer.split('\n\n');
       buffer = events.pop() || '';
 
       for (const eventText of events) {
-        const line = eventText.split('\\n').find((item) => item.startsWith('data: '));
+        const line = eventText.split('\n').find((item) => item.startsWith('data: '));
         if (!line) continue;
         let event;
         try { event = JSON.parse(line.slice(6)); } catch { continue; }
@@ -91,7 +91,7 @@ async function sendMessage(text) {
   } catch (error) {
     pending.lastChild.textContent = error.message === 'Unauthorized'
       ? 'Nexus is private. Check the local access settings.'
-      : (streamedText ? streamedText + '\\n\\n[Connection interrupted.]' : 'I could not reach the Nexus brain. Check the local backend connection.');
+      : (streamedText ? streamedText + '\n\n[Connection interrupted.]' : 'I could not reach the Nexus brain. Check the local backend connection.');
     console.error(error);
   }
 }
