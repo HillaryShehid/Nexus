@@ -424,6 +424,12 @@ class AIBrain:
 
         errors = []
         providers = list(self.provider_order)
+        streamed_any = False
+
+        def emit_chunk(chunk):
+            nonlocal streamed_any
+            streamed_any = True
+            on_chunk(chunk)
 
         for provider in providers:
             if not self._available(provider):
@@ -463,6 +469,16 @@ class AIBrain:
                     "provider": provider,
                     "error": type(exc).__name__,
                 })
+                # Once text has reached the UI, do not append a second
+                # provider's full answer to the partial first answer.
+                if streamed_any:
+                    return {
+                        "success": False,
+                        "content": "",
+                        "error": "The response stream was interrupted.",
+                        "provider_errors": errors,
+                        "profile": profile,
+                    }
 
         return {
             "success": False,
