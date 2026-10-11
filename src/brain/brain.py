@@ -420,7 +420,7 @@ class NexusBrain:
         return self._finish(state, brief, route, run_metrics, started_at)
 
     def _quick_conversation(self, request: str, started_at: float, on_chunk=None) -> dict[str, Any]:
-        """Answer lightweight conversation with a single local-model call."""
+        """Answer lightweight conversation with a single cloud-model call."""
         memory = self.memory.read_context()
         system = (
             self.identity.response_prompt()
@@ -452,7 +452,7 @@ class NexusBrain:
         else:
             answer = (
                 "I couldn't generate a response safely right now. "
-                "The local model returned an error."
+                "The configured online model returned an error."
             )
             status = "stopped"
 
