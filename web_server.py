@@ -234,9 +234,9 @@ class Handler(BaseHTTPRequestHandler):
 
                 for chunk in self._get_nexus().stream_quick_request(message):
                     event = json.dumps({"delta": chunk}, ensure_ascii=False)
-                    self.wfile.write(f"data: {event}\\n\\n".encode("utf-8"))
+                    self.wfile.write(f"data: {event}\n\n".encode("utf-8"))
                     self.wfile.flush()
-                self.wfile.write(b"data: {"done":true}\\n\\n")
+                self.wfile.write(b'data: {"done":true}\n\n')
                 self.wfile.flush()
             except ValueError as exc:
                 self._json(400, {"error": str(exc)})
@@ -244,7 +244,7 @@ class Handler(BaseHTTPRequestHandler):
                 logging.exception("Nexus streaming request failed.")
                 try:
                     event = json.dumps({"error": "Nexus stopped safely after an internal error."})
-                    self.wfile.write(f"data: {event}\\n\\n".encode("utf-8"))
+                    self.wfile.write(f"data: {event}\n\n".encode("utf-8"))
                     self.wfile.flush()
                 except Exception:
                     pass
