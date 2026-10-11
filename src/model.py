@@ -407,6 +407,7 @@ class AIBrain:
                 continue
             attempts += 1
             model = self._resolve_model(provider, profile, primary_provider)
+            yielded = False
             try:
                 stream = (
                     self._stream_gemini(model, system_prompt, user_prompt, self.max_tokens[profile])
@@ -415,7 +416,6 @@ class AIBrain:
                         provider, model, system_prompt, user_prompt, self.max_tokens[profile]
                     )
                 )
-                yielded = False
                 for chunk in stream:
                     yielded = True
                     yield {"type": "delta", "content": chunk, "provider": provider, "model": model}
@@ -425,6 +425,12 @@ class AIBrain:
                 raise RuntimeError("Provider returned empty output.")
             except Exception as exc:
                 last_error = exc
+                if yielded:
+                    # Retrying after visible output would concatenate a second
+                    # provider's answer onto the first and corrupt the reply.
+                    raise RuntimeError(
+                        "The response stream was interrupted after output began."
+                    ) from exc
                 logger.warning(
                     "Nexus streaming provider %s failed on attempt %d/%d.",
                     provider, attempts, self.max_provider_attempts,
