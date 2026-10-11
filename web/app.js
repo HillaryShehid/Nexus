@@ -65,10 +65,10 @@ async function sendMessage(text) {
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
 
-      const events = buffer.split('\\n\\n');
+      const events = buffer.split(/\r?\n\r?\n/);
       buffer = events.pop() || '';
       for (const event of events) {
-        const line = event.split('\\n').find((item) => item.startsWith('data: '));
+        const line = event.split(/\r?\n/).find((item) => item.startsWith('data: '));
         if (!line) continue;
         const data = JSON.parse(line.slice(6));
         if (data.error) throw new Error(data.error);
