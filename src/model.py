@@ -268,6 +268,98 @@ class AIBrain:
         content = response.choices[0].message.content
         return content if isinstance(content, str) else ""
 
+    def _generate_gemini_stream(
+        self,
+        model: str,
+        system_prompt: str,
+        user_prompt: str,
+        json_mode: bool,
+        max_tokens: int,
+        on_chunk,
+    ) -> str:
+        """Stream text from Gemini's SSE endpoint and forward each text delta."""
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            + model
+            + ":streamGenerateContent?alt=sse&key="
+            + self.gemini_api_key
+        )
+        body = {
+            "system_instruction": {"parts": [{"text": system_prompt}]},
+            "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
+            "generationConfig": {"maxOutputTokens": max_tokens},
+        }
+        if json_mode:
+            body["generationConfig"]["responseMimeType"] = "application/json"
+
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        pieces = []
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                for raw_line in response:
+                    line = raw_line.decode("utf-8", errors="replace").strip()
+                    if not line.startswith("data:"):
+                        continue
+                    payload_text = line[5:].strip()
+                    if not payload_text or payload_text == "[DONE]":
+                        continue
+                    payload = json.loads(payload_text)
+                    candidates = payload.get("candidates") or []
+                    if not candidates:
+                        continue
+                    parts = candidates[0].get("content", {}).get("parts", [])
+                    delta = "".join(
+                        str(part.get("text", "")) for part in parts
+                    )
+                    if delta:
+                        pieces.append(delta)
+                        on_chunk(delta)
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")[:1000]
+            raise RuntimeError(f"Gemini API HTTP {exc.code}: {detail}") from exc
+        return "".join(pieces)
+
+    def _generate_openai_compatible_stream(
+        self,
+        provider: str,
+        model: str,
+        system_prompt: str,
+        user_prompt: str,
+        json_mode: bool,
+        max_tokens: int,
+        on_chunk,
+    ) -> str:
+        """Stream text deltas from OpenAI-compatible cloud providers."""
+        kwargs = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "max_tokens": max_tokens,
+            "stream": True,
+        }
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
+
+        pieces = []
+        response = self.clients[provider].chat.completions.create(**kwargs)
+        for chunk in response:
+            choices = getattr(chunk, "choices", None) or []
+            if not choices:
+                continue
+            delta = getattr(choices[0], "delta", None)
+            content = getattr(delta, "content", None)
+            if isinstance(content, str) and content:
+                pieces.append(content)
+                on_chunk(content)
+        return "".join(pieces)
+
     def _generate_with_provider(
         self,
         provider: str,
@@ -275,6 +367,7 @@ class AIBrain:
         system_prompt: str,
         user_prompt: str,
         json_mode: bool,
+        on_chunk=None,
     ) -> tuple[str, str]:
         model = os.getenv(
             f"NEXUS_{profile.upper()}_MODEL",
@@ -282,22 +375,23 @@ class AIBrain:
         )
         max_tokens = self.max_tokens.get(profile, 512)
 
-        if provider == "gemini":
+        if on_chunk is not None:
+            if provider == "gemini":
+                content = self._generate_gemini_stream(
+                    model, system_prompt, user_prompt, json_mode, max_tokens, on_chunk
+                )
+            else:
+                content = self._generate_openai_compatible_stream(
+                    provider, model, system_prompt, user_prompt, json_mode,
+                    max_tokens, on_chunk
+                )
+        elif provider == "gemini":
             content = self._generate_gemini(
-                model,
-                system_prompt,
-                user_prompt,
-                json_mode,
-                max_tokens,
+                model, system_prompt, user_prompt, json_mode, max_tokens
             )
         else:
             content = self._generate_openai_compatible(
-                provider,
-                model,
-                system_prompt,
-                user_prompt,
-                json_mode,
-                max_tokens,
+                provider, model, system_prompt, user_prompt, json_mode, max_tokens
             )
 
         return content, model
@@ -308,8 +402,14 @@ class AIBrain:
         user_prompt: str,
         json_mode: bool = False,
         profile: str = "normal",
+        on_chunk=None,
     ) -> dict:
-        """Generate a response with automatic free-provider failover."""
+        """Generate a response with automatic free-provider failover.
+
+        When on_chunk is supplied, text is streamed from the selected provider.
+        If a provider fails after emitting partial text, Nexus reports failure
+        rather than silently mixing a fallback response into the partial output.
+        """
         if not isinstance(system_prompt, str) or not isinstance(
             user_prompt, str
         ):
@@ -336,6 +436,7 @@ class AIBrain:
                     system_prompt,
                     user_prompt,
                     json_mode,
+                    on_chunk=on_chunk,
                 )
 
                 if not content.strip():
