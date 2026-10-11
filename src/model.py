@@ -5,11 +5,8 @@ conversation state. OmniRoute is the single model gateway and handles provider
 selection and fallback behind one OpenAI-compatible endpoint.
 """
 
-import json
 import logging
 import os
-import urllib.error
-import urllib.request
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -102,66 +99,6 @@ class AIBrain:
 
         raise RuntimeError("No configured Nexus model provider is available.")
 
-    def _generate_gemini(
-        self,
-        model: str,
-        system_prompt: str,
-        user_prompt: str,
-        json_mode: bool,
-        max_tokens: int,
-    ) -> str:
-        """Call the Gemini Developer API without another SDK dependency."""
-        url = (
-            "https://generativelanguage.googleapis.com/v1beta/models/"
-            + model
-            + ":generateContent?key="
-            + self.gemini_api_key
-        )
-        body = {
-            "system_instruction": {
-                "parts": [{"text": system_prompt}],
-            },
-            "contents": [{
-                "role": "user",
-                "parts": [{"text": user_prompt}],
-            }],
-            "generationConfig": {
-                "maxOutputTokens": max_tokens,
-            },
-        }
-        if json_mode:
-            body["generationConfig"]["responseMimeType"] = "application/json"
-
-        request = urllib.request.Request(
-            url,
-            data=json.dumps(body).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=60) as response:
-                payload = json.loads(
-                    response.read().decode("utf-8")
-                )
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode(
-                "utf-8",
-                errors="replace",
-            )[:1000]
-            raise RuntimeError(
-                f"Gemini API HTTP {exc.code}: {detail}"
-            ) from exc
-
-        candidates = payload.get("candidates") or []
-        if not candidates:
-            raise RuntimeError("Gemini API returned no candidates.")
-
-        parts = candidates[0].get("content", {}).get("parts", [])
-        return "".join(
-            str(part.get("text", ""))
-            for part in parts
-        )
-
     def _generate_openai_compatible(
         self,
         provider: str,
@@ -185,62 +122,6 @@ class AIBrain:
         response = self.clients[provider].chat.completions.create(**kwargs)
         content = response.choices[0].message.content
         return content if isinstance(content, str) else ""
-
-    def _generate_gemini_stream(
-        self,
-        model: str,
-        system_prompt: str,
-        user_prompt: str,
-        json_mode: bool,
-        max_tokens: int,
-        on_chunk,
-    ) -> str:
-        """Stream text from Gemini's SSE endpoint and forward each text delta."""
-        url = (
-            "https://generativelanguage.googleapis.com/v1beta/models/"
-            + model
-            + ":streamGenerateContent?alt=sse&key="
-            + self.gemini_api_key
-        )
-        body = {
-            "system_instruction": {"parts": [{"text": system_prompt}]},
-            "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
-            "generationConfig": {"maxOutputTokens": max_tokens},
-        }
-        if json_mode:
-            body["generationConfig"]["responseMimeType"] = "application/json"
-
-        request = urllib.request.Request(
-            url,
-            data=json.dumps(body).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        pieces = []
-        try:
-            with urllib.request.urlopen(request, timeout=60) as response:
-                for raw_line in response:
-                    line = raw_line.decode("utf-8", errors="replace").strip()
-                    if not line.startswith("data:"):
-                        continue
-                    payload_text = line[5:].strip()
-                    if not payload_text or payload_text == "[DONE]":
-                        continue
-                    payload = json.loads(payload_text)
-                    candidates = payload.get("candidates") or []
-                    if not candidates:
-                        continue
-                    parts = candidates[0].get("content", {}).get("parts", [])
-                    delta = "".join(
-                        str(part.get("text", "")) for part in parts
-                    )
-                    if delta:
-                        pieces.append(delta)
-                        on_chunk(delta)
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")[:1000]
-            raise RuntimeError(f"Gemini API HTTP {exc.code}: {detail}") from exc
-        return "".join(pieces)
 
     def _generate_openai_compatible_stream(
         self,
