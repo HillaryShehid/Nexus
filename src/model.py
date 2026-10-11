@@ -1,25 +1,12 @@
 """Model gateway for Personal Nexus.
 
 Nexus owns identity, memory, planning, permissions, tools, verification, and
-conversation state. Model providers are replaceable infrastructure.
-
-Online free-first providers:
-- Gemini Developer API
-- Groq API
-- OpenRouter free-model router
-
-Offline:
-- Ollama remains available as the local fallback so Personal Nexus can still
-  operate without an internet connection.
-
-OpenAI is intentionally no longer a Personal Nexus provider.
+conversation state. OmniRoute is the single model gateway and handles provider
+selection and fallback behind one OpenAI-compatible endpoint.
 """
 
-import json
 import logging
 import os
-import urllib.error
-import urllib.request
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -27,8 +14,8 @@ from openai import OpenAI
 load_dotenv()
 logger = logging.getLogger("nexus.model")
 
-FREE_PROVIDER_ORDER = ("gemini", "groq", "openrouter", "mistral", "cloudflare", "nvidia", "cohere", "huggingface")
-ALLOWED_PROVIDERS = set(FREE_PROVIDER_ORDER) | {"ollama"}
+FREE_PROVIDER_ORDER = ("omniroute",)
+ALLOWED_PROVIDERS = set(FREE_PROVIDER_ORDER)
 
 
 class AIBrain:
@@ -36,15 +23,8 @@ class AIBrain:
 
     def __init__(self):
         self.mode = os.getenv("NEXUS_MODEL_MODE", "free").lower()
-        configured = os.getenv(
-            "NEXUS_PROVIDER_ORDER",
-            "gemini,groq,openrouter,mistral,cloudflare,nvidia,cohere,huggingface,ollama",
-        )
-        self.provider_order = tuple(
-            item.strip().lower()
-            for item in configured.split(",")
-            if item.strip()
-        )
+        # OmniRoute is the only Nexus gateway; it handles provider routing and fallback.
+        self.provider_order = ("omniroute",)
 
         invalid = set(self.provider_order) - ALLOWED_PROVIDERS
         if invalid:
@@ -53,36 +33,17 @@ class AIBrain:
                 + ", ".join(sorted(invalid))
             )
 
-        if self.mode not in {"free", "offline", "manual"}:
+        if self.mode not in {"free", "manual"}:
             raise ValueError(
-                "NEXUS_MODEL_MODE must be 'free', 'offline', or 'manual'."
-            )
-
-        if self.mode == "offline":
-            self.provider_order = ("ollama",)
-        elif self.mode == "free":
-            self.provider_order = tuple(
-                provider
-                for provider in self.provider_order
-                if provider in FREE_PROVIDER_ORDER or provider == "ollama"
+                "NEXUS_MODEL_MODE must be 'free' or 'manual'. "
+                "Nexus routes through OmniRoute in both modes."
             )
 
         if not self.provider_order:
             raise ValueError("No Nexus model providers are configured.")
 
         self.provider_models = {
-            "gemini": os.getenv("NEXUS_GEMINI_MODEL", "gemini-3.8-flash"),
-            "groq": os.getenv("NEXUS_GROQ_MODEL", "openai/gpt-oss-120b"),
-            "openrouter": os.getenv(
-                "NEXUS_OPENROUTER_MODEL",
-                "openrouter/free",
-            ),
-            "mistral": os.getenv("NEXUS_MISTRAL_MODEL", "mistral-small-latest"),
-            "cloudflare": os.getenv("NEXUS_CLOUDFLARE_MODEL", "@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
-            "nvidia": os.getenv("NEXUS_NVIDIA_MODEL", "openai/gpt-oss-120b"),
-            "cohere": os.getenv("NEXUS_COHERE_MODEL", "command-a-plus-05-2026"),
-            "huggingface": os.getenv("NEXUS_HUGGINGFACE_MODEL", "Qwen/Qwen3-Next-80B-A3B-Instruct"),
-            "ollama": os.getenv("NEXUS_LOCAL_MODEL", "llama3.2"),
+            "omniroute": os.getenv("NEXUS_OMNIROUTE_MODEL", "auto"),
         }
 
         self.models = {
@@ -101,66 +62,20 @@ class AIBrain:
             "research": int(os.getenv("NEXUS_RESEARCH_MAX_TOKENS", "1024")),
         }
 
-        self.clients = {}
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
-
-        groq_key = os.getenv("GROQ_API_KEY")
-        if groq_key:
-            self.clients["groq"] = OpenAI(
-                api_key=groq_key,
-                base_url="https://api.groq.com/openai/v1",
-            )
-
-        openrouter_key = os.getenv("OPENROUTER_API_KEY")
-        if openrouter_key:
-            self.clients["openrouter"] = OpenAI(
-                api_key=openrouter_key,
-                base_url="https://openrouter.ai/api/v1",
-                default_headers={
-                    "HTTP-Referer": os.getenv(
-                        "OPENROUTER_HTTP_REFERER",
-                        "https://github.com/HillaryShehid/Nexus",
-                    ),
-                    "X-Title": "Nexus Personal AI",
-                },
-            )
-
-        simple_compatible = {
-            "mistral": ("MISTRAL_API_KEY", "https://api.mistral.ai/v1"),
-            "nvidia": ("NVIDIA_API_KEY", "https://integrate.api.nvidia.com/v1"),
-            "cohere": ("COHERE_API_KEY", "https://api.cohere.com/compatibility/v1"),
-            "huggingface": ("HUGGINGFACE_API_KEY", "https://router.huggingface.co/v1"),
-        }
-        for provider, (key_name, base_url) in simple_compatible.items():
-            api_key = os.getenv(key_name)
-            if api_key:
-                self.clients[provider] = OpenAI(api_key=api_key, base_url=base_url)
-
-        cloudflare_key = os.getenv("CLOUDFLARE_API_TOKEN")
-        cloudflare_account = os.getenv("CLOUDFLARE_ACCOUNT_ID")
-        if cloudflare_key and cloudflare_account:
-            self.clients["cloudflare"] = OpenAI(
-                api_key=cloudflare_key,
-                base_url=(
-                    "https://api.cloudflare.com/client/v4/accounts/"
-                    + cloudflare_account
-                    + "/ai/v1"
+        # OmniRoute is the sole model gateway. Its OpenAI-compatible API
+        # handles provider selection, free-tier routing, and fallback.
+        self.clients = {
+            "omniroute": OpenAI(
+                api_key=os.getenv("OMNIROUTE_API_KEY", "sk_omniroute"),
+                base_url=os.getenv(
+                    "OMNIROUTE_BASE_URL",
+                    "http://127.0.0.1:20128/v1",
                 ),
             )
-
-        ollama_url = os.getenv(
-            "NEXUS_OLLAMA_URL",
-            "http://localhost:11434/v1",
-        )
-        self.clients["ollama"] = OpenAI(
-            base_url=ollama_url,
-            api_key=os.getenv("NEXUS_OLLAMA_API_KEY", "ollama"),
-        )
+        }
 
     def _available(self, provider: str) -> bool:
-        if provider == "gemini":
-            return bool(self.gemini_api_key)
-        return provider in self.clients
+        return provider == "omniroute" and provider in self.clients
 
     def _provider_for_profile(self, profile: str) -> str:
         """Choose the first configured provider in the free-first order.
@@ -183,66 +98,6 @@ class AIBrain:
                 return provider
 
         raise RuntimeError("No configured Nexus model provider is available.")
-
-    def _generate_gemini(
-        self,
-        model: str,
-        system_prompt: str,
-        user_prompt: str,
-        json_mode: bool,
-        max_tokens: int,
-    ) -> str:
-        """Call the Gemini Developer API without another SDK dependency."""
-        url = (
-            "https://generativelanguage.googleapis.com/v1beta/models/"
-            + model
-            + ":generateContent?key="
-            + self.gemini_api_key
-        )
-        body = {
-            "system_instruction": {
-                "parts": [{"text": system_prompt}],
-            },
-            "contents": [{
-                "role": "user",
-                "parts": [{"text": user_prompt}],
-            }],
-            "generationConfig": {
-                "maxOutputTokens": max_tokens,
-            },
-        }
-        if json_mode:
-            body["generationConfig"]["responseMimeType"] = "application/json"
-
-        request = urllib.request.Request(
-            url,
-            data=json.dumps(body).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=60) as response:
-                payload = json.loads(
-                    response.read().decode("utf-8")
-                )
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode(
-                "utf-8",
-                errors="replace",
-            )[:1000]
-            raise RuntimeError(
-                f"Gemini API HTTP {exc.code}: {detail}"
-            ) from exc
-
-        candidates = payload.get("candidates") or []
-        if not candidates:
-            raise RuntimeError("Gemini API returned no candidates.")
-
-        parts = candidates[0].get("content", {}).get("parts", [])
-        return "".join(
-            str(part.get("text", ""))
-            for part in parts
-        )
 
     def _generate_openai_compatible(
         self,
@@ -268,6 +123,42 @@ class AIBrain:
         content = response.choices[0].message.content
         return content if isinstance(content, str) else ""
 
+    def _generate_openai_compatible_stream(
+        self,
+        provider: str,
+        model: str,
+        system_prompt: str,
+        user_prompt: str,
+        json_mode: bool,
+        max_tokens: int,
+        on_chunk,
+    ) -> str:
+        """Stream text deltas from OpenAI-compatible cloud providers."""
+        kwargs = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "max_tokens": max_tokens,
+            "stream": True,
+        }
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
+
+        pieces = []
+        response = self.clients[provider].chat.completions.create(**kwargs)
+        for chunk in response:
+            choices = getattr(chunk, "choices", None) or []
+            if not choices:
+                continue
+            delta = getattr(choices[0], "delta", None)
+            content = getattr(delta, "content", None)
+            if isinstance(content, str) and content:
+                pieces.append(content)
+                on_chunk(content)
+        return "".join(pieces)
+
     def _generate_with_provider(
         self,
         provider: str,
@@ -275,6 +166,7 @@ class AIBrain:
         system_prompt: str,
         user_prompt: str,
         json_mode: bool,
+        on_chunk=None,
     ) -> tuple[str, str]:
         model = os.getenv(
             f"NEXUS_{profile.upper()}_MODEL",
@@ -282,23 +174,19 @@ class AIBrain:
         )
         max_tokens = self.max_tokens.get(profile, 512)
 
-        if provider == "gemini":
-            content = self._generate_gemini(
-                model,
-                system_prompt,
-                user_prompt,
-                json_mode,
-                max_tokens,
+        if on_chunk is not None:
+            if provider != "omniroute":
+                raise RuntimeError(f"Unsupported model gateway: {provider}")
+            content = self._generate_openai_compatible_stream(
+                provider, model, system_prompt, user_prompt, json_mode,
+                max_tokens, on_chunk
+            )
+        elif provider == "omniroute":
+            content = self._generate_openai_compatible(
+                provider, model, system_prompt, user_prompt, json_mode, max_tokens
             )
         else:
-            content = self._generate_openai_compatible(
-                provider,
-                model,
-                system_prompt,
-                user_prompt,
-                json_mode,
-                max_tokens,
-            )
+            raise RuntimeError(f"Unsupported model gateway: {provider}")
 
         return content, model
 
@@ -308,8 +196,14 @@ class AIBrain:
         user_prompt: str,
         json_mode: bool = False,
         profile: str = "normal",
+        on_chunk=None,
     ) -> dict:
-        """Generate a response with automatic free-provider failover."""
+        """Generate a response with automatic free-provider failover.
+
+        When on_chunk is supplied, text is streamed from the selected provider.
+        If a provider fails after emitting partial text, Nexus reports failure
+        rather than silently mixing a fallback response into the partial output.
+        """
         if not isinstance(system_prompt, str) or not isinstance(
             user_prompt, str
         ):
@@ -324,6 +218,12 @@ class AIBrain:
 
         errors = []
         providers = list(self.provider_order)
+        streamed_any = False
+
+        def emit_chunk(chunk):
+            nonlocal streamed_any
+            streamed_any = True
+            on_chunk(chunk)
 
         for provider in providers:
             if not self._available(provider):
@@ -336,6 +236,7 @@ class AIBrain:
                     system_prompt,
                     user_prompt,
                     json_mode,
+                    on_chunk=emit_chunk if on_chunk is not None else None,
                 )
 
                 if not content.strip():
@@ -362,6 +263,16 @@ class AIBrain:
                     "provider": provider,
                     "error": type(exc).__name__,
                 })
+                # Once text has reached the UI, do not append a second
+                # provider's full answer to the partial first answer.
+                if streamed_any:
+                    return {
+                        "success": False,
+                        "content": "",
+                        "error": "The response stream was interrupted.",
+                        "provider_errors": errors,
+                        "profile": profile,
+                    }
 
         return {
             "success": False,

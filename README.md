@@ -3,9 +3,9 @@
 Nexus is the canonical intelligence layer behind Nexus Core: one shared brain with specialized Business, Builder, and Researcher roles. The current implementation is being built toward the master vision incrementally; the event/autonomy foundation is now active while full business-domain adapters are developed.
 
 
-### Fast local conversation mode
+### Fast conversation mode
 
-Simple conversational messages are routed through a lightweight one-call path using a smaller local model by default. This avoids running the full planning, verification, research, and self-evaluation pipeline for messages that do not require actions, while preserving Nexus identity, recalled memory, and conversation persistence. Requests that need tools, research, coding, or other actions still use the full verified executive pipeline.
+Simple conversational messages use a lightweight one-call path. Requests requiring tools, research, coding, or other actions still use the full verified executive pipeline.
 
 ## What Nexus is
 
@@ -58,6 +58,7 @@ Understand → Identify knowledge gaps → Research → Assess evidence → Upda
 - 🔎 Evidence-aware web research with source checks and uncertainty handling.
 - 🧩 Planning, tool permissions, verification, failure diagnosis, bounded recovery, and self-evaluation.
 - 💾 Persistent personal memory with a separate conversation history.
+- 📓 Structured private daily activity log records run outcomes, verified accomplishments, and error categories; relevant past entries are recalled before new work.
 - 📝 Resumable local tasks with checkpoints and approval states.
 - 🧮 Calculator, safe web retrieval, workspace filesystem access, memory storage, and an isolated code-test runner.
 - 🧬 Bounded self-improvement proposals that remain owner-controlled before promotion.
@@ -65,14 +66,14 @@ Understand → Identify knowledge gaps → Research → Assess evidence → Upda
 - 🎙️ Modular LiveKit voice architecture for realtime speech-to-speech conversations.
 - 🗣️ Natural voice turn-taking with configurable VAD/STT/TTS providers.
 - 🔗 Voice requests are bridged back into the existing NexusCore, keeping Nexus memory, planning, permissions, tools, verification, and learning authoritative.
-- 🦙 Local-first model inference through Ollama is now the default, so normal Nexus reasoning does not require paid OpenAI API credits.
+- ☁️ Single model-gateway integration through OmniRoute; provider selection and fallback are delegated to OmniRoute.
 - ✉️ Owner-controlled email integration supports reading/searching mail and permission-gated sending.
 
 ## Realtime voice
 
 Nexus uses a modular **LiveKit voice pipeline** for actual speech-to-speech conversation.
 
-The default local-first architecture is:
+Text chat uses OmniRoute as its only model gateway. The realtime voice adapter is a separate path and still needs an end-to-end check to confirm it uses the same gateway; speech-to-text and text-to-speech remain separate interface components. The intended architecture is:
 
 ```text
 Your microphone
@@ -107,25 +108,19 @@ Your microphone
 
 LiveKit is the realtime transport/orchestration layer, while NexusCore remains the authoritative brain. Cloud providers can be enabled later, but local Ollama + local voice components are the preferred zero-cost development path.
 
-## Local-first model
+## OmniRoute model gateway
 
-The default model provider is **Ollama**. Quick conversation defaults to the compact `qwen2.5:1.5b` model for a better intelligence/speed balance on local hardware, while normal/deeper profiles continue to use `llama3.2` unless overridden.
-
-Nexus can still use OpenAI when explicitly selected with:
+Nexus uses OmniRoute as its **only model-provider integration**. Nexus sends requests to one OpenAI-compatible endpoint; OmniRoute handles connected providers, model routing, and fallback.
 
 ```env
-NEXUS_MODEL_PROVIDER=openai
-OPENAI_API_KEY=...
+NEXUS_MODEL_MODE=free
+NEXUS_PROVIDER_ORDER=omniroute
+NEXUS_OMNIROUTE_MODEL=auto
+OMNIROUTE_BASE_URL=http://127.0.0.1:20128/v1
+OMNIROUTE_API_KEY=sk_omniroute
 ```
 
-For local inference:
-
-```env
-NEXUS_MODEL_PROVIDER=ollama
-NEXUS_LOCAL_MODEL=llama3.2
-NEXUS_QUICK_MODEL=qwen2.5:1.5b
-NEXUS_OLLAMA_URL=http://localhost:11434/v1
-```
+Start OmniRoute separately and connect provider accounts you are eligible to use in its dashboard. Its advertised ~1.62B monthly token figure is an aggregate estimate across third-party free tiers, not a token grant or guaranteed personal allowance. Provider limits, terms, model quality, and availability still apply. Nexus no longer keeps separate direct integrations for Gemini, Groq, OpenRouter, or other model providers; OmniRoute owns that routing layer.
 
 ## Email
 
@@ -189,7 +184,7 @@ python -m pip install -e ".[dev]"
 python run.py
 ```
 
-For the local-first web interface, start Ollama with the configured local model. LiveKit voice credentials are only needed when using the realtime voice path.
+Start the OmniRoute gateway before using Nexus chat. LiveKit voice credentials are only needed when using the realtime voice path.
 
 ## Tests
 

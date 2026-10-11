@@ -37,20 +37,61 @@ async function checkHealth() {
 
 async function sendMessage(text) {
   const pending = addMessage('Nexus', 'Thinking…');
+  let streamedText = '';
   try {
-    const response = await fetch('/api/chat', {
+    const response = await fetch('/api/chat/stream', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: text }),
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Request failed');
-    pending.lastChild.textContent = data.response || 'No response received.';
+    if (!response.ok) {
+      let detail = {};
+      try { detail = await response.json(); } catch {}
+      throw new Error(detail.error || 'Request failed');
+    }
+    if (!response.body) throw new Error('Streaming is not supported by this connection.');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let receivedDelta = false;
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split('\n\n');
+      buffer = events.pop() || '';
+
+      for (const eventText of events) {
+        const line = eventText.split('\n').find((item) => item.startsWith('data: '));
+        if (!line) continue;
+        let event;
+        try { event = JSON.parse(line.slice(6)); } catch { continue; }
+
+        if (event.type === 'delta' && typeof event.text === 'string') {
+          if (!receivedDelta) {
+            pending.lastChild.textContent = '';
+            receivedDelta = true;
+          }
+          streamedText += event.text;
+          pending.lastChild.textContent = streamedText;
+          messages.scrollTop = messages.scrollHeight;
+        } else if (event.type === 'done') {
+          pending.lastChild.textContent = event.response || streamedText || 'No response received.';
+        } else if (event.type === 'error') {
+          throw new Error(event.message || 'Nexus streaming failed.');
+        }
+      }
+    }
+    if (!pending.lastChild.textContent || pending.lastChild.textContent === 'Thinking…') {
+      pending.lastChild.textContent = streamedText || 'No response received.';
+    }
   } catch (error) {
     pending.lastChild.textContent = error.message === 'Unauthorized'
       ? 'Nexus is private. Check the local access settings.'
-      : 'I could not reach the Nexus brain. Check the local backend connection.';
+      : (streamedText ? streamedText + '\n\n[Connection interrupted.]' : 'I could not reach the Nexus brain. Check the local backend connection.');
     console.error(error);
   }
 }

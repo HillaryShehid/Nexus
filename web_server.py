@@ -22,6 +22,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 class Handler(BaseHTTPRequestHandler):
     nexus = None
 
+    def _write_stream_data(self, payload):
+        """Write one SSE payload; HTTP/1.0 closes the response when finished."""
+        self.wfile.write(payload)
+        self.wfile.flush()
+
     def _json(self, status, payload):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
@@ -176,7 +181,8 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
 
-        if path != "/api/chat":
+        streaming = path == "/api/chat/stream"
+        if path not in {"/api/chat", "/api/chat/stream"}:
             self._json(404, {"error": "Not found"})
             return
         if not self._authorized():
@@ -192,7 +198,31 @@ class Handler(BaseHTTPRequestHandler):
             if len(message) > 8000:
                 self._json(413, {"error": "Message exceeds Nexus input limit"})
                 return
-            response = self._get_nexus().handle_request(message)
+            nexus = self._get_nexus()
+            if streaming:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Connection", "close")
+                self.end_headers()
+
+                def emit_delta(delta):
+                    event = json.dumps({"type": "delta", "text": delta}, ensure_ascii=False)
+                    self._write_stream_data(("data: " + event + "\n\n").encode("utf-8"))
+
+                try:
+                    response = nexus.handle_request(message, on_chunk=emit_delta)
+                    if isinstance(response, dict):
+                        response = response.get("response", response)
+                    event = json.dumps({"type": "done", "response": response}, ensure_ascii=False)
+                    self._write_stream_data(("data: " + event + "\n\n").encode("utf-8"))
+                except Exception:
+                    logging.exception("Nexus streaming request failed.")
+                    event = json.dumps({"type": "error", "message": "Nexus stopped safely after an internal error."})
+                    self._write_stream_data(("data: " + event + "\n\n").encode("utf-8"))
+                return
+
+            response = nexus.handle_request(message)
             if isinstance(response, dict):
                 response = response.get("response", response)
             self._json(200, {"response": response})
