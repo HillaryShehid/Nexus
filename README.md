@@ -73,7 +73,7 @@ Understand → Identify knowledge gaps → Research → Assess evidence → Upda
 
 Nexus uses a modular **LiveKit voice pipeline** for actual speech-to-speech conversation.
 
-The voice interface uses the same OmniRoute model gateway as text chat; speech-to-text and text-to-speech remain separate interface components. The architecture is:
+Text chat uses OmniRoute as its only model gateway. The realtime voice adapter is a separate path and still needs an end-to-end check to confirm it uses the same gateway; speech-to-text and text-to-speech remain separate interface components. The intended architecture is:
 
 ```text
 Your microphone
