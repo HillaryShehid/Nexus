@@ -83,9 +83,13 @@ async function sendMessage(text) {
       pending.lastChild.textContent = 'No response received.';
     }
   } catch (error) {
-    pending.lastChild.textContent = error.message === 'Unauthorized'
+    const message = error.message === 'Unauthorized'
       ? 'Nexus is private. Check the local access settings.'
       : error.message || 'I could not reach the Nexus brain.';
+    const partial = pending.lastChild.textContent;
+    pending.lastChild.textContent = partial
+      ? partial + '\n\n[Response interrupted: ' + message + ']'
+      : message;
     console.error(error);
   }
 }
