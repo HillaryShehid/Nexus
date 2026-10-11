@@ -6,7 +6,6 @@ stored under the configured Nexus workspace and are not shared automatically.
 import json
 import os
 import re
-import tempfile
 from datetime import datetime, timezone
 
 from src.registry import WORKSPACE_DIR
@@ -114,6 +113,8 @@ class AgentDailyLog:
             if overlap:
                 scored.append((overlap, index, entry))
         scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        if not scored:
+            return ""
         selected = []
         for _, _, entry in scored[:max(1, min(int(limit), 10))]:
             selected.append({
