@@ -65,7 +65,7 @@ Understand → Identify knowledge gaps → Research → Assess evidence → Upda
 - 🎙️ Modular LiveKit voice architecture for realtime speech-to-speech conversations.
 - 🗣️ Natural voice turn-taking with configurable VAD/STT/TTS providers.
 - 🔗 Voice requests are bridged back into the existing NexusCore, keeping Nexus memory, planning, permissions, tools, verification, and learning authoritative.
-- 🦙 Local-first model inference through Ollama is now the default, so normal Nexus reasoning does not require paid OpenAI API credits.
+- ☁️ Free-first online model routing, with Gemini preferred and automatic fallback to other configured providers. Local Ollama is optional and is not used by default in free mode.
 - ✉️ Owner-controlled email integration supports reading/searching mail and permission-gated sending.
 
 ## Realtime voice
@@ -107,23 +107,24 @@ Your microphone
 
 LiveKit is the realtime transport/orchestration layer, while NexusCore remains the authoritative brain. Cloud providers can be enabled later, but local Ollama + local voice components are the preferred zero-cost development path.
 
-## Local-first model
+## Free-first cloud models
 
-The default model provider is **Ollama**. Quick conversation defaults to the compact `qwen2.5:1.5b` model for a better intelligence/speed balance on local hardware, while normal/deeper profiles continue to use `llama3.2` unless overridden.
+The default mode is `NEXUS_MODEL_MODE=free`. It tries configured online providers in this order: Gemini, Groq, OpenRouter, then other configured provider integrations. Gemini is the preferred provider when `GEMINI_API_KEY` is set; if a provider fails, Nexus tries the next configured provider.
 
-Nexus can still use OpenAI when explicitly selected with:
+Free access and rate limits depend on each provider's current policies and account. A provider listed in the configuration is not automatically free for every model or account.
 
 ```env
-NEXUS_MODEL_PROVIDER=openai
-OPENAI_API_KEY=...
+NEXUS_MODEL_MODE=free
+NEXUS_PROVIDER_ORDER=gemini,groq,openrouter,mistral,cloudflare,nvidia,cohere,huggingface
+GEMINI_API_KEY=...
+NEXUS_GEMINI_MODEL=gemini-3.8-flash
 ```
 
-For local inference:
+Local Ollama remains available only when explicitly selecting offline mode; it is not part of the default free cloud provider order.
 
 ```env
-NEXUS_MODEL_PROVIDER=ollama
+NEXUS_MODEL_MODE=offline
 NEXUS_LOCAL_MODEL=llama3.2
-NEXUS_QUICK_MODEL=qwen2.5:1.5b
 NEXUS_OLLAMA_URL=http://localhost:11434/v1
 ```
 
