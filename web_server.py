@@ -22,11 +22,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 class Handler(BaseHTTPRequestHandler):
     nexus = None
 
-    def _write_chunk(self, payload):
-        """Write one HTTP chunk for the streaming chat endpoint."""
-        self.wfile.write(f"{len(payload):X}\r\n".encode("ascii"))
+    def _write_stream_data(self, payload):
+        """Write one SSE payload; HTTP/1.0 closes the response when finished."""
         self.wfile.write(payload)
-        self.wfile.write(b"\r\n")
         self.wfile.flush()
 
     def _json(self, status, payload):
@@ -206,25 +204,22 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "text/event-stream; charset=utf-8")
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("Connection", "close")
-                self.send_header("Transfer-Encoding", "chunked")
                 self.end_headers()
 
                 def emit_delta(delta):
                     event = json.dumps({"type": "delta", "text": delta}, ensure_ascii=False)
-                    self._write_chunk(("data: " + event + "\n\n").encode("utf-8"))
+                    self._write_stream_data(("data: " + event + "\n\n").encode("utf-8"))
 
                 try:
                     response = nexus.handle_request(message, on_chunk=emit_delta)
                     if isinstance(response, dict):
                         response = response.get("response", response)
                     event = json.dumps({"type": "done", "response": response}, ensure_ascii=False)
-                    self._write_chunk(("data: " + event + "\n\n").encode("utf-8"))
+                    self._write_stream_data(("data: " + event + "\n\n").encode("utf-8"))
                 except Exception:
                     logging.exception("Nexus streaming request failed.")
                     event = json.dumps({"type": "error", "message": "Nexus stopped safely after an internal error."})
-                    self._write_chunk(("data: " + event + "\n\n").encode("utf-8"))
-                finally:
-                    self._write_chunk(b"0\r\n\r\n")
+                    self._write_stream_data(("data: " + event + "\n\n").encode("utf-8"))
                 return
 
             response = nexus.handle_request(message)
