@@ -58,6 +58,7 @@ Understand → Identify knowledge gaps → Research → Assess evidence → Upda
 - 🔎 Evidence-aware web research with source checks and uncertainty handling.
 - 🧩 Planning, tool permissions, verification, failure diagnosis, bounded recovery, and self-evaluation.
 - 💾 Persistent personal memory with a separate conversation history.
+- 📓 Structured private daily activity log records run outcomes, verified accomplishments, and error categories; relevant past entries are recalled before new work.
 - 📝 Resumable local tasks with checkpoints and approval states.
 - 🧮 Calculator, safe web retrieval, workspace filesystem access, memory storage, and an isolated code-test runner.
 - 🧬 Bounded self-improvement proposals that remain owner-controlled before promotion.
@@ -72,7 +73,7 @@ Understand → Identify knowledge gaps → Research → Assess evidence → Upda
 
 Nexus uses a modular **LiveKit voice pipeline** for actual speech-to-speech conversation.
 
-The default local-first architecture is:
+The voice interface uses the same OmniRoute model gateway as text chat; speech-to-text and text-to-speech remain separate interface components. The architecture is:
 
 ```text
 Your microphone
