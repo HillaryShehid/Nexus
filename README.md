@@ -3,9 +3,9 @@
 Nexus is the canonical intelligence layer behind Nexus Core: one shared brain with specialized Business, Builder, and Researcher roles. The current implementation is being built toward the master vision incrementally; the event/autonomy foundation is now active while full business-domain adapters are developed.
 
 
-### Fast local conversation mode
+### Fast conversation mode
 
-Simple conversational messages are routed through a lightweight one-call path using a smaller local model by default. This avoids running the full planning, verification, research, and self-evaluation pipeline for messages that do not require actions, while preserving Nexus identity, recalled memory, and conversation persistence. Requests that need tools, research, coding, or other actions still use the full verified executive pipeline.
+Simple conversational messages use a lightweight one-call path. Requests requiring tools, research, coding, or other actions still use the full verified executive pipeline.
 
 ## What Nexus is
 
@@ -65,7 +65,7 @@ Understand → Identify knowledge gaps → Research → Assess evidence → Upda
 - 🎙️ Modular LiveKit voice architecture for realtime speech-to-speech conversations.
 - 🗣️ Natural voice turn-taking with configurable VAD/STT/TTS providers.
 - 🔗 Voice requests are bridged back into the existing NexusCore, keeping Nexus memory, planning, permissions, tools, verification, and learning authoritative.
-- ☁️ Free-first online model routing, with Gemini preferred and automatic fallback to other configured providers. Local Ollama is optional and is not used by default in free mode.
+- ☁️ Single model-gateway integration through OmniRoute; provider selection and fallback are delegated to OmniRoute.
 - ✉️ Owner-controlled email integration supports reading/searching mail and permission-gated sending.
 
 ## Realtime voice
@@ -107,26 +107,19 @@ Your microphone
 
 LiveKit is the realtime transport/orchestration layer, while NexusCore remains the authoritative brain. Cloud providers can be enabled later, but local Ollama + local voice components are the preferred zero-cost development path.
 
-## Free-first cloud models
+## OmniRoute model gateway
 
-The default mode is `NEXUS_MODEL_MODE=free`. It tries configured online providers in this order: Gemini, Groq, OpenRouter, then other configured provider integrations. Gemini is the preferred provider when `GEMINI_API_KEY` is set; if a provider fails, Nexus tries the next configured provider.
-
-Free access and rate limits depend on each provider's current policies and account. A provider listed in the configuration is not automatically free for every model or account.
+Nexus uses OmniRoute as its **only model-provider integration**. Nexus sends requests to one OpenAI-compatible endpoint; OmniRoute handles connected providers, model routing, and fallback.
 
 ```env
 NEXUS_MODEL_MODE=free
-NEXUS_PROVIDER_ORDER=gemini,groq,openrouter,mistral,cloudflare,nvidia,cohere,huggingface
-GEMINI_API_KEY=...
-NEXUS_GEMINI_MODEL=gemini-3.8-flash
+NEXUS_PROVIDER_ORDER=omniroute
+NEXUS_OMNIROUTE_MODEL=auto
+OMNIROUTE_BASE_URL=http://127.0.0.1:20128/v1
+OMNIROUTE_API_KEY=sk_omniroute
 ```
 
-Local Ollama remains available only when explicitly selecting offline mode; it is not part of the default free cloud provider order.
-
-```env
-NEXUS_MODEL_MODE=offline
-NEXUS_LOCAL_MODEL=llama3.2
-NEXUS_OLLAMA_URL=http://localhost:11434/v1
-```
+Start OmniRoute separately and connect provider accounts you are eligible to use in its dashboard. Its advertised ~1.62B monthly token figure is an aggregate estimate across third-party free tiers, not a token grant or guaranteed personal allowance. Provider limits, terms, model quality, and availability still apply. Nexus no longer keeps separate direct integrations for Gemini, Groq, OpenRouter, or other model providers; OmniRoute owns that routing layer.
 
 ## Email
 
@@ -190,7 +183,7 @@ python -m pip install -e ".[dev]"
 python run.py
 ```
 
-For the local-first web interface, start Ollama with the configured local model. LiveKit voice credentials are only needed when using the realtime voice path.
+Start the OmniRoute gateway before using Nexus chat. LiveKit voice credentials are only needed when using the realtime voice path.
 
 ## Tests
 
