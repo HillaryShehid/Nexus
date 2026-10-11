@@ -100,7 +100,7 @@ class NexusCore:
     def role_profile(self, role: str):
         return RoleRouter.profile(NexusRole(role))
 
-    def handle_request(self, user_input):
+    def handle_request(self, user_input, on_chunk=None):
         if not isinstance(user_input, str):
             return "I need the request as text."
         if len(user_input) > MAX_USER_INPUT:
@@ -112,7 +112,9 @@ class NexusCore:
             return "Tell me what you want me to do."
 
         try:
-            return self.brain.run(user_input)
+            if on_chunk is None:
+                return self.brain.run(user_input)
+            return self.brain.run(user_input, on_chunk=on_chunk)
         except Exception:
             logger.exception("Nexus brain failure; request stopped safely.")
             return (
