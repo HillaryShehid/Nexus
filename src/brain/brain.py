@@ -96,12 +96,12 @@ class NexusBrain:
             "live_promotion": "owner_approval_required",
         }
 
-    def run(self, request: str, max_actions: int | None = None) -> str:
+    def run(self, request: str, max_actions: int | None = None, on_chunk=None) -> str:
         """Run Nexus and return only the final natural-language response."""
-        result = self.run_detailed(request, max_actions=max_actions)
+        result = self.run_detailed(request, max_actions=max_actions, on_chunk=on_chunk)
         return result["response"]
 
-    def run_detailed(self, request: str, max_actions: int | None = None) -> dict[str, Any]:
+    def run_detailed(self, request: str, max_actions: int | None = None, on_chunk=None) -> dict[str, Any]:
         """
         Run Nexus and return response plus a safe execution summary.
 
@@ -138,7 +138,7 @@ class NexusBrain:
         # persistence. Action/research requests continue through the full
         # verified pipeline below.
         if route.name == "quick" and max_actions is None:
-            return self._quick_conversation(request, started_at)
+            return self._quick_conversation(request, started_at, on_chunk=on_chunk)
 
         memory = self.memory.read_context()
         lessons = self.learning.retrieve_lessons()
@@ -419,7 +419,7 @@ class NexusBrain:
             run_metrics["recovery_success"] = False
         return self._finish(state, brief, route, run_metrics, started_at)
 
-    def _quick_conversation(self, request: str, started_at: float) -> dict[str, Any]:
+    def _quick_conversation(self, request: str, started_at: float, on_chunk=None) -> dict[str, Any]:
         """Answer lightweight conversation with a single local-model call."""
         memory = self.memory.read_context()
         system = (
@@ -433,11 +433,19 @@ class NexusBrain:
             f"Recent remembered context:\n{memory[:12000]}\n\n"
             f"User message:\n{request}"
         )
-        result = self.model.generate(
-            system,
-            user_prompt,
-            profile="quick",
-        )
+        if on_chunk is None:
+            result = self.model.generate(
+                system,
+                user_prompt,
+                profile="quick",
+            )
+        else:
+            result = self.model.generate(
+                system,
+                user_prompt,
+                profile="quick",
+                on_chunk=on_chunk,
+            )
         if result.get("success"):
             answer = result["content"]
             status = "complete"
