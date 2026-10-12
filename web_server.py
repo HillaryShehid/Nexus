@@ -1,5 +1,6 @@
 """Local development API for the personal Nexus brain and Realtime voice bridge."""
 
+import hmac
 import json
 import logging
 import os
@@ -37,9 +38,15 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _authorized(self):
-        if not NEXUS_API_TOKEN:
-            return True
-        return self.headers.get("Authorization") == "Bearer " + NEXUS_API_TOKEN
+        """Allow tokenless access only for a loopback-only development server."""
+        if NEXUS_API_TOKEN:
+            supplied = self.headers.get("Authorization", "")
+            expected = "Bearer " + NEXUS_API_TOKEN
+            return hmac.compare_digest(supplied, expected)
+
+        # A missing token must never silently turn a remotely reachable API
+        # into an unauthenticated service. HOST is the configured bind address.
+        return HOST.strip().lower() in {"127.0.0.1", "localhost", "::1"}
 
     def _read_json(self):
         try:
@@ -98,10 +105,17 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path = urlparse(self.path).path
 
-        if path in {"/api/realtime/token", "/api/realtime/brain"}:
-            if not self._authorized():
-                self._json(401, {"error": "Unauthorized"})
-                return
+        # Every API endpoint that can create a voice capability or execute a
+        # brain request must pass the same authorization gate.
+        if path in {
+            "/api/livekit/token",
+            "/api/realtime/token",
+            "/api/realtime/brain",
+            "/api/chat",
+            "/api/chat/stream",
+        } and not self._authorized():
+            self._json(401, {"error": "Unauthorized"})
+            return
 
         if path == "/api/livekit/token":
             try:
@@ -184,9 +198,6 @@ class Handler(BaseHTTPRequestHandler):
         streaming = path == "/api/chat/stream"
         if path not in {"/api/chat", "/api/chat/stream"}:
             self._json(404, {"error": "Not found"})
-            return
-        if not self._authorized():
-            self._json(401, {"error": "Unauthorized"})
             return
 
         try:
