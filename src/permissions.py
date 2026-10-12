@@ -1,4 +1,5 @@
 import logging
+import sys
 
 from src.access import Authorization
 from src.registry import SHARED_REGISTRY
@@ -12,6 +13,7 @@ class PermissionSystem:
     def __init__(self, authorization=None, actor_id=None):
         self.authorization = authorization or Authorization()
         self.actor_id = None
+        self.approval_handler = None
         if actor_id is not None:
             self.set_actor(actor_id)
 
@@ -65,6 +67,15 @@ class PermissionSystem:
         return {"status": "blocked", "reason": "Unknown permission policy; fail closed."}
 
     def request_user_clearance(self, tool_name: str, args: dict) -> bool:
+        if callable(self.approval_handler):
+            try:
+                return self.approval_handler(tool_name, args) is True
+            except Exception:
+                logger.exception("Approval handler failed; action denied.")
+                return False
+        if not getattr(sys.stdin, "isatty", lambda: False)():
+            logger.warning("No interactive approval channel is available; action denied.")
+            return False
         print(f"\n🔐 Nexus wants permission to run: {tool_name}")
         print(f"Arguments: {args}")
         try:
