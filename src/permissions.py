@@ -39,7 +39,7 @@ class PermissionSystem:
         policy = spec["policy"]
         if actor_id is None:
             if policy in {"ELEVATION_REQUIRED", "UNTRUSTED_RUNNER"}:
-                return {"status": "approval_required", "reason": "Owner authentication and explicit approval are required."}
+                return {"status": "approval_required", "authenticated": False, "reason": "Owner authentication is required before approval can be requested."}
             return {"status": "blocked", "reason": "Authenticated owner context is required."}
 
         actor = self.authorization.get_user(actor_id)
@@ -48,7 +48,7 @@ class PermissionSystem:
 
         if policy in {"ELEVATION_REQUIRED", "UNTRUSTED_RUNNER"}:
             if not self.authorization.can(actor_id, tool_name):
-                return {"status": "approval_required", "reason": "Owner approval is required for this action."}
+                return {"status": "approval_required", "authenticated": True, "reason": "Owner approval is required for this action."}
         if tool_name == "email" and args.get("action") in {"read", "search"}:
             return {"status": "allowed", "reason": "Email reads are non-destructive."}
         if policy in {"READ", "LOW_RISK"}:
