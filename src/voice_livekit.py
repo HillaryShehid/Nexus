@@ -21,7 +21,7 @@ class LiveKitVoiceConfig:
     def __init__(self) -> None:
         self.stt_provider = os.getenv("NEXUS_VOICE_STT", "deepgram").lower()
         self.llm_provider = os.getenv("NEXUS_VOICE_LLM", "omniroute").lower()
-        self.tts_provider = os.getenv("NEXUS_VOICE_TTS", "kokoro").lower()
+        self.tts_provider = os.getenv("NEXUS_VOICE_TTS", "inference").lower()
         self.ollama_model = os.getenv("NEXUS_LOCAL_MODEL", "llama3.2")
         self.ollama_url = os.getenv("NEXUS_OLLAMA_URL", "http://localhost:11434/v1")
         self.omniroute_model = os.getenv(
