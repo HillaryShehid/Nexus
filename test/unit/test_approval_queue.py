@@ -70,3 +70,20 @@ def test_approval_queue_rejects_malformed_or_stale_decisions():
     assert queue.decide(pending["id"], False) is False
     worker.join(timeout=1)
     assert result["approved"] is True
+
+
+def test_approval_queue_shows_full_bounded_python_code():
+    queue = ApprovalQueue(timeout_seconds=2)
+    code = "x" * 3000
+    result = {}
+    worker = threading.Thread(
+        target=lambda: result.setdefault(
+            "approved", queue.request_approval("code_tester", {"python_code": code})
+        )
+    )
+    worker.start()
+    pending = _wait_for_pending(queue)
+    assert pending["args"]["python_code"] == code
+    assert queue.decide(pending["id"], False) is True
+    worker.join(timeout=1)
+    assert result["approved"] is False
