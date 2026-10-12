@@ -6,7 +6,7 @@
   "description": "Personal-first Nexus Intelligence Core",
   "scripts": {
     "test": "node --test",
-    "check": "node --check src/index.js src/core.js src/memory.js src/reasoning.js src/permissions.js src/tools.js src/verification.js"
+    "check": "node scripts/check-js.mjs"
   },
   "engines": {
     "node": ">=20"
