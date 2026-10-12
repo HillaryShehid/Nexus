@@ -18,7 +18,7 @@ jobs:
       - name: Install Python dependencies
         run: python -m pip install -e ".[dev]"
       - name: Python syntax check
-        run: python -m compileall -q src run.py
+        run: python -m compileall -q src run.py web_server.py voice_agent.py scripts test
       - name: Python tests
         run: python -m pytest -q
 
