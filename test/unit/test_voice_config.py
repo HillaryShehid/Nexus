@@ -20,7 +20,7 @@ def test_voice_config_defaults_to_omniroute(monkeypatch):
     assert config.omniroute_model == "auto"
     assert config.omniroute_url == "http://127.0.0.1:20128/v1"
     assert config.omniroute_api_key == "sk_omniroute"
-    assert config.tts_provider == "kokoro"
+    assert config.tts_provider == "inference"
 
 
 def test_voice_config_supports_explicit_ollama_fallback(monkeypatch):
