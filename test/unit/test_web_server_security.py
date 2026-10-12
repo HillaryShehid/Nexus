@@ -32,3 +32,26 @@ def test_configured_api_token_requires_exact_bearer_header():
     missing_token = RequestStub()
     with patch("web_server.NEXUS_API_TOKEN", "correct-token"):
         assert Handler._authorized(missing_token) is False
+
+def test_all_sensitive_post_endpoints_require_authorization():
+    class PostStub:
+        def __init__(self, path):
+            self.path = path
+            self.response = None
+
+        def _authorized(self):
+            return False
+
+        def _json(self, status, payload):
+            self.response = (status, payload)
+
+    for path in (
+        "/api/livekit/token",
+        "/api/realtime/token",
+        "/api/realtime/brain",
+        "/api/chat",
+        "/api/chat/stream",
+    ):
+        request = PostStub(path)
+        Handler.do_POST(request)
+        assert request.response == (401, {"error": "Unauthorized"}), path
