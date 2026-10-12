@@ -10,11 +10,13 @@ class RequestStub:
 
 def test_tokenless_api_access_is_limited_to_loopback_development():
     request = RequestStub()
-    with patch("web_server.NEXUS_API_TOKEN", ""), patch("web_server.HOST", "127.0.0.1"):
+    with patch("web_server.NEXUS_API_TOKEN", ""), patch("web_server.ALLOW_UNAUTHENTICATED_LOCAL", False), patch("web_server.HOST", "127.0.0.1"):
+        assert Handler._authorized(request) is False
+    with patch("web_server.NEXUS_API_TOKEN", ""), patch("web_server.ALLOW_UNAUTHENTICATED_LOCAL", True), patch("web_server.HOST", "127.0.0.1"):
         assert Handler._authorized(request) is True
-    with patch("web_server.NEXUS_API_TOKEN", ""), patch("web_server.HOST", "localhost"):
+    with patch("web_server.NEXUS_API_TOKEN", ""), patch("web_server.ALLOW_UNAUTHENTICATED_LOCAL", True), patch("web_server.HOST", "localhost"):
         assert Handler._authorized(request) is True
-    with patch("web_server.NEXUS_API_TOKEN", ""), patch("web_server.HOST", "0.0.0.0"):
+    with patch("web_server.NEXUS_API_TOKEN", ""), patch("web_server.ALLOW_UNAUTHENTICATED_LOCAL", True), patch("web_server.HOST", "0.0.0.0"):
         assert Handler._authorized(request) is False
 
 
