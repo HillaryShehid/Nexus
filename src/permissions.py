@@ -46,15 +46,22 @@ class PermissionSystem:
         if actor is None or not actor.active:
             return {"status": "blocked", "reason": "Unknown or inactive user."}
 
-        if policy in {"ELEVATION_REQUIRED", "UNTRUSTED_RUNNER"}:
-            if not self.authorization.can(actor_id, tool_name):
-                return {"status": "approval_required", "authenticated": True, "reason": "Owner approval is required for this action."}
+        # Read-only exceptions must be evaluated before the tool's broad policy.
         if tool_name == "email" and args.get("action") in {"read", "search"}:
             return {"status": "allowed", "reason": "Email reads are non-destructive."}
-        if policy in {"READ", "LOW_RISK"}:
-            return {"status": "allowed", "reason": "Policy permits automatic execution."}
         if tool_name == "file_system" and args.get("action") == "read":
             return {"status": "allowed", "reason": "Filesystem reads are non-destructive."}
+
+        if policy in {"ELEVATION_REQUIRED", "UNTRUSTED_RUNNER"}:
+            if not self.authorization.can(actor_id, "approve_high_impact"):
+                return {"status": "blocked", "reason": "Owner role is required to approve this action."}
+            return {
+                "status": "approval_required",
+                "authenticated": True,
+                "reason": "Owner approval is required for this action.",
+            }
+        if policy in {"READ", "LOW_RISK"}:
+            return {"status": "allowed", "reason": "Policy permits automatic execution."}
         return {"status": "blocked", "reason": "Unknown permission policy; fail closed."}
 
     def request_user_clearance(self, tool_name: str, args: dict) -> bool:
