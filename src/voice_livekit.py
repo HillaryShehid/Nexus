@@ -4,15 +4,9 @@ The voice transport and provider pipeline are intentionally separate from
 NexusBrain. LiveKit handles realtime media and turn-taking; NexusCore remains
 the authoritative personal assistant brain.
 
-Default design:
-- LiveKit Agents for realtime WebRTC/audio.
-- Silero VAD locally.
-- Ollama locally for the voice router.
-- Kokoro locally for speech output when configured.
-- Deepgram is supported as an optional STT provider.
-
-The provider choices are environment-configurable so Nexus can move between
-local and cloud components without changing its identity, memory, or tools.
+The voice LLM defaults to the same OpenAI-compatible OmniRoute gateway used by
+text chat. STT and TTS are separate components and can be configured according
+to available providers; local STT/TTS services are optional, not the LLM default.
 """
 
 from __future__ import annotations
@@ -26,10 +20,18 @@ class LiveKitVoiceConfig:
 
     def __init__(self) -> None:
         self.stt_provider = os.getenv("NEXUS_VOICE_STT", "deepgram").lower()
-        self.llm_provider = os.getenv("NEXUS_VOICE_LLM", "ollama").lower()
+        self.llm_provider = os.getenv("NEXUS_VOICE_LLM", "omniroute").lower()
         self.tts_provider = os.getenv("NEXUS_VOICE_TTS", "kokoro").lower()
         self.ollama_model = os.getenv("NEXUS_LOCAL_MODEL", "llama3.2")
         self.ollama_url = os.getenv("NEXUS_OLLAMA_URL", "http://localhost:11434/v1")
+        self.omniroute_model = os.getenv(
+            "NEXUS_VOICE_LLM_MODEL",
+            os.getenv("NEXUS_OMNIROUTE_MODEL", "auto"),
+        )
+        self.omniroute_url = os.getenv(
+            "OMNIROUTE_BASE_URL", "http://127.0.0.1:20128/v1"
+        )
+        self.omniroute_api_key = os.getenv("OMNIROUTE_API_KEY", "sk_omniroute")
         self.kokoro_url = os.getenv("NEXUS_KOKORO_URL", "http://localhost:8880/v1")
         self.kokoro_voice = os.getenv("NEXUS_KOKORO_VOICE", "af_alloy")
         self.deepgram_model = os.getenv("NEXUS_DEEPGRAM_STT_MODEL", "nova-3")
@@ -41,8 +43,8 @@ class LiveKitVoiceConfig:
         return {
             "stt": self.stt_provider,
             "llm": self.llm_provider,
+            "llm_model": self.omniroute_model if self.llm_provider == "omniroute" else self.ollama_model,
             "tts": self.tts_provider,
-            "local_llm_model": self.ollama_model,
             "local_tts_voice": self.kokoro_voice,
             "language": self.language,
         }
@@ -71,7 +73,14 @@ def build_livekit_models(config: LiveKitVoiceConfig):
             "A local Whisper adapter is intentionally kept as a separate provider."
         )
 
-    if config.llm_provider == "ollama":
+    if config.llm_provider == "omniroute":
+        llm = openai.LLM(
+            model=config.omniroute_model,
+            base_url=config.omniroute_url,
+            api_key=config.omniroute_api_key,
+        )
+    elif config.llm_provider == "ollama":
+        # Explicit opt-in only; Ollama is no longer the default voice LLM.
         llm = openai.LLM.with_ollama(
             model=config.ollama_model,
             base_url=config.ollama_url,
@@ -79,7 +88,9 @@ def build_livekit_models(config: LiveKitVoiceConfig):
     elif config.llm_provider == "inference":
         llm = inference.LLM(model="google/gemma-4-31b-it")
     else:
-        raise RuntimeError("Unsupported NEXUS_VOICE_LLM. Use 'ollama' or 'inference'.")
+        raise RuntimeError(
+            "Unsupported NEXUS_VOICE_LLM. Use 'omniroute', 'ollama', or 'inference'."
+        )
 
     if config.tts_provider == "kokoro":
         tts = openai.TTS(
