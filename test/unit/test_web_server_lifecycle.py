@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import web_server
 
 
@@ -7,6 +9,7 @@ def test_web_requests_reuse_one_nexus_brain(monkeypatch):
     class FakeNexusCore:
         def __init__(self, actor_id):
             self.actor_id = actor_id
+            self.permissions = SimpleNamespace(approval_handler=None)
             instances.append(self)
 
     monkeypatch.setattr(web_server, "NexusCore", FakeNexusCore)

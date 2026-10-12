@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
+from src.approval_queue import ApprovalQueue
 from src.core import NexusCore
 
 HOST = os.getenv("HOST", "127.0.0.1")
@@ -18,6 +19,7 @@ MAX_BODY = 16_000
 MAX_VOICE_REQUEST = 8_000
 NEXUS_API_TOKEN = os.getenv("NEXUS_API_TOKEN", "")
 ALLOW_UNAUTHENTICATED_LOCAL = os.getenv("NEXUS_ALLOW_UNAUTHENTICATED_LOCAL", "").strip().lower() in {"1", "true", "yes"}
+APPROVAL_QUEUE = ApprovalQueue()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -75,10 +77,19 @@ class Handler(BaseHTTPRequestHandler):
             with cls._nexus_lock:
                 if cls.nexus is None:
                     cls.nexus = NexusCore(actor_id="hilal")
+        # The web approval queue is the only approval channel in this server.
+        cls.nexus.permissions.approval_handler = APPROVAL_QUEUE.request_approval
         return cls.nexus
 
     def do_GET(self):
         path = urlparse(self.path).path
+        if path == "/api/approvals/pending":
+            if not self._authorized():
+                self._json(401, {"error": "Unauthorized"})
+                return
+            self._json(200, {"approvals": APPROVAL_QUEUE.list_pending()})
+            return
+
         if path == "/api/health":
             if not self._authorized():
                 self._json(401, {"error": "Unauthorized"})
@@ -120,6 +131,7 @@ class Handler(BaseHTTPRequestHandler):
         # Every API endpoint that can create a voice capability or execute a
         # brain request must pass the same authorization gate.
         if path in {
+            "/api/approvals/decision",
             "/api/livekit/token",
             "/api/realtime/token",
             "/api/realtime/brain",
@@ -127,6 +139,23 @@ class Handler(BaseHTTPRequestHandler):
             "/api/chat/stream",
         } and not self._authorized():
             self._json(401, {"error": "Unauthorized"})
+            return
+
+        if path == "/api/approvals/decision":
+            try:
+                payload = self._read_json()
+            except ValueError as exc:
+                self._json(400, {"error": str(exc)})
+                return
+            request_id = payload.get("id")
+            approved = payload.get("approved")
+            if not isinstance(request_id, str) or type(approved) is not bool:
+                self._json(400, {"error": "id and a boolean approved value are required"})
+                return
+            if not APPROVAL_QUEUE.decide(request_id, approved):
+                self._json(409, {"error": "Approval request is no longer pending"})
+                return
+            self._json(200, {"ok": True})
             return
 
         if path == "/api/livekit/token":

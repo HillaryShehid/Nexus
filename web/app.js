@@ -6,6 +6,8 @@ const dot = document.querySelector('.dot');
 const mic = document.querySelector('#mic');
 const voiceStatus = document.querySelector('#voice-status');
 const speakToggle = document.querySelector('#speak-toggle');
+const approvalsPanel = document.querySelector('#approvals');
+const approvalList = document.querySelector('#approval-list');
 
 let voiceRoom = null;
 let attachedAudio = [];
@@ -32,6 +34,95 @@ async function checkHealth() {
   } catch {
     statusEl.textContent = 'Backend offline';
     dot.classList.remove('online');
+  }
+}
+
+let approvalPollBusy = false;
+let lastApprovalSignature = "";
+
+function renderApprovals(items) {
+  const signature = JSON.stringify(items);
+  if (signature === lastApprovalSignature) return;
+  lastApprovalSignature = signature;
+  approvalList.replaceChildren();
+
+  if (!items.length) {
+    approvalsPanel.hidden = true;
+    return;
+  }
+
+  approvalsPanel.hidden = false;
+  for (const item of items) {
+    const card = document.createElement('article');
+    card.className = 'approval-item';
+
+    const title = document.createElement('h3');
+    title.textContent = 'Nexus wants to run: ' + String(item.tool || 'sensitive action');
+
+    const time = document.createElement('p');
+    time.className = 'approval-time';
+    time.textContent = 'Requested ' + new Date(item.created_at).toLocaleTimeString();
+
+    const details = document.createElement('pre');
+    details.className = 'approval-details';
+    details.textContent = JSON.stringify(item.args || {}, null, 2);
+
+    const actions = document.createElement('div');
+    actions.className = 'approval-actions';
+
+    const approve = document.createElement('button');
+    approve.type = 'button';
+    approve.className = 'approval-approve';
+    approve.textContent = 'Approve';
+    approve.addEventListener('click', () => decideApproval(item.id, true, approve));
+
+    const deny = document.createElement('button');
+    deny.type = 'button';
+    deny.className = 'approval-deny';
+    deny.textContent = 'Deny';
+    deny.addEventListener('click', () => decideApproval(item.id, false, deny));
+
+    actions.append(approve, deny);
+    card.append(title, time, details, actions);
+    approvalList.appendChild(card);
+  }
+}
+
+async function refreshApprovals() {
+  if (approvalPollBusy) return;
+  approvalPollBusy = true;
+  try {
+    const response = await fetch('/api/approvals/pending', { credentials: 'same-origin' });
+    if (!response.ok) return;
+    const data = await response.json();
+    renderApprovals(Array.isArray(data.approvals) ? data.approvals : []);
+  } catch {
+    // The chat UI remains usable if the optional approval endpoint is unavailable.
+  } finally {
+    approvalPollBusy = false;
+  }
+}
+
+async function decideApproval(id, approved, button) {
+  button.disabled = true;
+  try {
+    const response = await fetch('/api/approvals/decision', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, approved }),
+    });
+    if (!response.ok) {
+      let detail = {};
+      try { detail = await response.json(); } catch {}
+      throw new Error(detail.error || 'Could not submit approval.');
+    }
+    await refreshApprovals();
+  } catch (error) {
+    addMessage('Nexus', error.message || 'The approval decision could not be submitted.');
+    button.disabled = false;
+    lastApprovalSignature = '';
+    await refreshApprovals();
   }
 }
 
@@ -204,3 +295,5 @@ mic.addEventListener('click', async () => {
 speakToggle.textContent = '🗣️ LiveKit voice';
 
 checkHealth();
+refreshApprovals();
+setInterval(refreshApprovals, 1500);
