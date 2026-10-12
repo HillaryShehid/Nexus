@@ -28,3 +28,22 @@ def test_unknown_permission_state_fails_closed(mocker):
     tool_calls = [call for call in nexus.tools.execute.call_args_list if call.args and call.args[0] == "calculator"]
     assert tool_calls == []
     assert not any(call.args[0] == "calculator" for call in nexus.tools.execute.call_args_list)
+
+
+def test_unauthenticated_sensitive_action_never_prompts_or_executes(mocker):
+    from src.brain.brain import NexusBrain
+
+    brain = mocker.MagicMock()
+    brain.permissions = PermissionSystem()
+    brain.tools = mocker.MagicMock()
+    brain.permissions.request_user_clearance = mocker.MagicMock(return_value=True)
+
+    result = NexusBrain._execute_verified(brain, {
+        "tool": "file_system",
+        "args": {"action": "write", "path": "x.txt", "content": "hello"},
+    })
+
+    assert result["verified"] is False
+    assert result["failure_category"] == "permission_block"
+    brain.permissions.request_user_clearance.assert_not_called()
+    brain.tools.execute.assert_not_called()
