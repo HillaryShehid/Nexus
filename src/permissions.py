@@ -17,8 +17,6 @@ class PermissionSystem:
 
     def set_actor(self, actor_id):
         if actor_id is None:
-            # Never create an implicit anonymous actor: tool authorization must
-            # fail closed when Nexus has no authenticated owner context.
             self.actor_id = None
             return
         if self.authorization.get_user(actor_id) is None:
@@ -33,13 +31,20 @@ class PermissionSystem:
         if not isinstance(args, dict):
             return {"status": "blocked", "reason": "Invalid argument structure."}
 
-        # Authentication is required for every tool, including READ and
-        # LOW_RISK tools. A harmless policy is not an anonymous-access policy.
+        policy = spec["policy"]
+        # High-impact actions may request an owner approval, but must never be
+        # auto-executed without a verified owner context and approval decision.
         if actor_id is None:
+            if policy in {"ELEVATION_REQUIRED", "UNTRUSTED_RUNNER"}:
+                return {
+                    "status": "approval_required",
+                    "reason": "Owner authentication and explicit approval are required.",
+                }
             return {
                 "status": "blocked",
                 "reason": "Authenticated owner context is required.",
             }
+
         actor = self.authorization.get_user(actor_id)
         if actor is None or not actor.active:
             return {"status": "blocked", "reason": "Unknown or inactive user."}
@@ -50,17 +55,13 @@ class PermissionSystem:
             and "action" in args
             and args["action"] not in allowed_actions
         ):
-            return {
-                "status": "blocked",
-                "reason": "Requested action is not permitted.",
-            }
+            return {"status": "blocked", "reason": "Requested action is not permitted."}
 
-        policy = spec["policy"]
         if policy in {"ELEVATION_REQUIRED", "UNTRUSTED_RUNNER"}:
             if not self.authorization.can(actor_id, tool_name):
                 return {
-                    "status": "blocked",
-                    "reason": "Owner authorization is required for this action.",
+                    "status": "approval_required",
+                    "reason": "Owner approval is required for this action.",
                 }
         if tool_name == "email" and args.get("action") in {"read", "search"}:
             return {"status": "allowed", "reason": "Email reads are non-destructive."}
