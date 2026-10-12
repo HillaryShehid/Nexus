@@ -4,6 +4,7 @@ import hmac
 import json
 import logging
 import os
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -22,7 +23,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 
 
 class Handler(BaseHTTPRequestHandler):
+    # One brain for the current single-user development server. Requests are
+    # serialized until NexusCore exposes a safe per-session concurrency model.
     nexus = None
+    _nexus_lock = threading.Lock()
+    _request_lock = threading.RLock()
 
     def _write_stream_data(self, payload):
         """Write one SSE payload; HTTP/1.0 closes the response when finished."""
@@ -65,9 +70,12 @@ class Handler(BaseHTTPRequestHandler):
         return payload
 
     def _get_nexus(self):
-        if self.nexus is None:
-            self.nexus = NexusCore(actor_id="hilal")
-        return self.nexus
+        cls = type(self)
+        if cls.nexus is None:
+            with cls._nexus_lock:
+                if cls.nexus is None:
+                    cls.nexus = NexusCore(actor_id="hilal")
+        return cls.nexus
 
     def do_GET(self):
         path = urlparse(self.path).path
@@ -226,7 +234,8 @@ class Handler(BaseHTTPRequestHandler):
                     self._write_stream_data(("data: " + event + "\n\n").encode("utf-8"))
 
                 try:
-                    response = nexus.handle_request(message, on_chunk=emit_delta)
+                    with self._request_lock:
+                        response = nexus.handle_request(message, on_chunk=emit_delta)
                     if isinstance(response, dict):
                         response = response.get("response", response)
                     event = json.dumps({"type": "done", "response": response}, ensure_ascii=False)
@@ -237,7 +246,8 @@ class Handler(BaseHTTPRequestHandler):
                     self._write_stream_data(("data: " + event + "\n\n").encode("utf-8"))
                 return
 
-            response = nexus.handle_request(message)
+            with self._request_lock:
+                response = nexus.handle_request(message)
             if isinstance(response, dict):
                 response = response.get("response", response)
             self._json(200, {"response": response})
