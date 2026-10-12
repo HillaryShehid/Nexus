@@ -73,7 +73,7 @@ Understand → Identify knowledge gaps → Research → Assess evidence → Upda
 
 Nexus uses a modular **LiveKit voice pipeline** for actual speech-to-speech conversation.
 
-Text chat uses OmniRoute as its only model gateway. The realtime voice adapter is a separate path and still needs an end-to-end check to confirm it uses the same gateway; speech-to-text and text-to-speech remain separate interface components. The intended architecture is:
+Text chat uses OmniRoute as its only model gateway. Realtime voice now defaults its language model to the same OpenAI-compatible OmniRoute gateway as text chat. Speech-to-text and text-to-speech remain separate providers, so voice still requires their own configuration and an end-to-end check. The default TTS path uses hosted LiveKit inference to avoid local speech synthesis; provider access and usage limits may apply. The intended architecture is:
 
 ```text
 Your microphone
@@ -87,7 +87,7 @@ Your microphone
       +--> STT (Deepgram optional / local inference fallback)
       |
       v
- Local Ollama model
+ OmniRoute LLM gateway
       |
       v
    NexusCore
@@ -97,7 +97,7 @@ Your microphone
  Authoritative Nexus response
       |
       v
- TTS (Kokoro local / ElevenLabs optional)
+ TTS (hosted inference by default / Kokoro or ElevenLabs optional)
       |
       v
  Browser speaker
@@ -106,7 +106,7 @@ Your microphone
      You
 ```
 
-LiveKit is the realtime transport/orchestration layer, while NexusCore remains the authoritative brain. Cloud providers can be enabled later, but local Ollama + local voice components are the preferred zero-cost development path.
+LiveKit is the realtime transport/orchestration layer, while NexusCore remains the authoritative brain. The voice LLM defaults to OmniRoute; Ollama remains an explicit local fallback only. STT/TTS are separate services and may have provider access requirements or usage limits.
 
 ## OmniRoute model gateway
 

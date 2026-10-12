@@ -598,6 +598,13 @@ class NexusBrain:
         clearance_status = clearance.get("status")
 
         if clearance_status == "approval_required":
+            # A prompt is not authentication. Never let an unauthenticated
+            # request reach the approval UI or execute a sensitive tool.
+            if clearance.get("authenticated") is not True:
+                return failed(
+                    "Authenticated owner context is required before approval.",
+                    "permission_block",
+                )
             try:
                 approved = self.permissions.request_user_clearance(
                     tool_name,
