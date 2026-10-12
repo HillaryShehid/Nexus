@@ -46,6 +46,7 @@ def test_all_sensitive_post_endpoints_require_authorization():
             self.response = (status, payload)
 
     for path in (
+        "/api/approvals/decision",
         "/api/livekit/token",
         "/api/realtime/token",
         "/api/realtime/brain",
