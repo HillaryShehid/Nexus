@@ -23,7 +23,12 @@ class ApprovalQueue:
         safe: dict[str, str] = {}
         for key, value in list(args.items())[:20]:
             name = str(key)[:80]
-            limit = 600 if name.lower() in {"body", "content", "python_code"} else 240
+            if name.lower() == "python_code":
+                limit = 3000
+            elif name.lower() in {"body", "content"}:
+                limit = 600
+            else:
+                limit = 240
             safe[name] = str(value)[:limit]
         return safe
 
