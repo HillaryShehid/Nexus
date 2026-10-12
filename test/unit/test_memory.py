@@ -34,3 +34,18 @@ def test_legacy_json_string_conversations_are_readable(tmp_path, monkeypatch):
     context = memory.read_context()
     assert "User: old" in context
     assert "Nexus: reply" in context
+
+def test_long_escaped_conversation_remains_valid_json(tmp_path, monkeypatch):
+    tools = ToolSystem()
+    monkeypatch.setattr(tools, "memory_file", str(tmp_path / "nexus_memory.json"))
+    memory = CognitiveMemory(tools, store=LocalMemoryStore(tools))
+
+    user_message = '"' * 8000
+    assistant_message = "\\" * 12000
+    assert memory.save_conversation(user_message, assistant_message) is True
+
+    raw = LocalMemoryStore(tools).get("chat_context")
+    history = json.loads(raw)
+    assert len(history) == 1
+    assert history[0]["user"] == user_message
+    assert history[0]["assistant"] == assistant_message
