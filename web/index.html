@@ -36,7 +36,18 @@
       </div>
     </section>
 
-    <footer>Personal Nexus • Local-first voice architecture • No business features</footer>
+    <section id="approvals" class="approval-panel" aria-live="polite" hidden>
+      <div class="approval-heading">
+        <div>
+          <div class="eyebrow">ACTION REQUIRED</div>
+          <h2>Nexus needs your approval</h2>
+        </div>
+        <span class="approval-note">Sensitive actions expire after 2 minutes.</span>
+      </div>
+      <div id="approval-list" class="approval-list"></div>
+    </section>
+
+    <footer>Personal Nexus • Voice and approvals are modular • No business features</footer>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
