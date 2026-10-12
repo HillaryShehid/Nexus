@@ -20,9 +20,19 @@ class LocalMemoryStore(MemoryStore):
         return result.get("success") is True
 
     def append_conversation(self, value):
+        # Bound individual fields, not the serialized JSON string: slicing
+        # encoded JSON can cut an escape sequence and silently corrupt memory.
+        entry = value
+        if isinstance(value, dict):
+            entry = dict(value)
+            if "user" in entry:
+                entry["user"] = str(entry["user"])[:8000]
+            if "assistant" in entry:
+                entry["assistant"] = str(entry["assistant"])[:12000]
+        serialized = json.dumps(entry, ensure_ascii=False)
         result = self.tools.execute(
             "memory_store",
-            {"action": "append_conversation", "key": "chat_context", "value": json.dumps(value, ensure_ascii=False)[:24000]},
+            {"action": "append_conversation", "key": "chat_context", "value": serialized},
         )
         return result.get("success") is True
 
