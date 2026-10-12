@@ -16,6 +16,7 @@ WEB_ROOT = Path(__file__).parent / "web"
 MAX_BODY = 16_000
 MAX_VOICE_REQUEST = 8_000
 NEXUS_API_TOKEN = os.getenv("NEXUS_API_TOKEN", "")
+ALLOW_UNAUTHENTICATED_LOCAL = os.getenv("NEXUS_ALLOW_UNAUTHENTICATED_LOCAL", "").strip().lower() in {"1", "true", "yes"}
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -46,7 +47,10 @@ class Handler(BaseHTTPRequestHandler):
 
         # A missing token must never silently turn a remotely reachable API
         # into an unauthenticated service. HOST is the configured bind address.
-        return HOST.strip().lower() in {"127.0.0.1", "localhost", "::1"}
+        return (
+            ALLOW_UNAUTHENTICATED_LOCAL
+            and HOST.strip().lower() in {"127.0.0.1", "localhost", "::1"}
+        )
 
     def _read_json(self):
         try:
