@@ -97,7 +97,7 @@ Your microphone
  Authoritative Nexus response
       |
       v
- TTS (Kokoro local / ElevenLabs optional)
+ TTS (hosted inference by default / Kokoro or ElevenLabs optional)
       |
       v
  Browser speaker
