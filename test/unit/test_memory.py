@@ -1,3 +1,5 @@
+import json
+
 from src.brain.local_memory_store import LocalMemoryStore
 from src.brain.memory import CognitiveMemory
 from src.tools import ToolSystem
@@ -22,8 +24,9 @@ def test_legacy_json_string_conversations_are_readable(tmp_path, monkeypatch):
     tools = ToolSystem()
     memory_file = tmp_path / "nexus_memory.json"
     monkeypatch.setattr(tools, "memory_file", str(memory_file))
+    legacy_entry = json.dumps({"user": "old", "assistant": "reply"})
     memory_file.write_text(
-        '{"conversations":["{\"user\":\"old\",\"assistant\":\"reply\"}"],"facts":{}}',
+        json.dumps({"conversations": [legacy_entry], "facts": {}}),
         encoding="utf-8",
     )
 
