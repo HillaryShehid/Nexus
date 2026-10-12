@@ -15,7 +15,6 @@ class PermissionSystem:
         if actor_id is not None:
             self.set_actor(actor_id)
 
-
     def set_actor(self, actor_id):
         if actor_id is None:
             # Never create an implicit anonymous actor: tool authorization must
@@ -34,27 +33,41 @@ class PermissionSystem:
         if not isinstance(args, dict):
             return {"status": "blocked", "reason": "Invalid argument structure."}
 
+        # Authentication is required for every tool, including READ and
+        # LOW_RISK tools. A harmless policy is not an anonymous-access policy.
+        if actor_id is None:
+            return {
+                "status": "blocked",
+                "reason": "Authenticated owner context is required.",
+            }
+        actor = self.authorization.get_user(actor_id)
+        if actor is None or not actor.active:
+            return {"status": "blocked", "reason": "Unknown or inactive user."}
+
         allowed_actions = spec["limits"].get("action")
-        if allowed_actions is not None and "action" in args and args["action"] not in allowed_actions:
-            return {"status": "blocked", "reason": "Requested action is not permitted."}
+        if (
+            allowed_actions is not None
+            and "action" in args
+            and args["action"] not in allowed_actions
+        ):
+            return {
+                "status": "blocked",
+                "reason": "Requested action is not permitted.",
+            }
 
         policy = spec["policy"]
         if policy in {"ELEVATION_REQUIRED", "UNTRUSTED_RUNNER"}:
-            if actor_id is None:
-                return {"status": "approval_required", "reason": "Explicit owner approval is required."}
-            actor = self.authorization.get_user(actor_id)
-            if actor is None or not actor.active:
-                return {"status": "blocked", "reason": "Unknown or inactive user."}
             if not self.authorization.can(actor_id, tool_name):
-                return {"status": "blocked", "reason": "Owner authorization is required for this action."}
+                return {
+                    "status": "blocked",
+                    "reason": "Owner authorization is required for this action.",
+                }
         if tool_name == "email" and args.get("action") in {"read", "search"}:
             return {"status": "allowed", "reason": "Email reads are non-destructive."}
         if policy in {"READ", "LOW_RISK"}:
             return {"status": "allowed", "reason": "Policy permits automatic execution."}
         if tool_name == "file_system" and args.get("action") == "read":
             return {"status": "allowed", "reason": "Filesystem reads are non-destructive."}
-        if actor_id is None:
-            return {"status": "blocked", "reason": "Authenticated owner context is required."}
         return {"status": "blocked", "reason": "Unknown permission policy; fail closed."}
 
     def request_user_clearance(self, tool_name: str, args: dict) -> bool:
