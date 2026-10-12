@@ -31,6 +31,11 @@ class PermissionSystem:
         if not isinstance(args, dict):
             return {"status": "blocked", "reason": "Invalid argument structure."}
 
+        # Reject invalid actions before authentication or approval routing.
+        allowed_actions = spec["limits"].get("action")
+        if allowed_actions is not None and "action" in args and args["action"] not in allowed_actions:
+            return {"status": "blocked", "reason": "Requested action is not permitted."}
+
         policy = spec["policy"]
         if actor_id is None:
             if policy in {"ELEVATION_REQUIRED", "UNTRUSTED_RUNNER"}:
@@ -40,10 +45,6 @@ class PermissionSystem:
         actor = self.authorization.get_user(actor_id)
         if actor is None or not actor.active:
             return {"status": "blocked", "reason": "Unknown or inactive user."}
-
-        allowed_actions = spec["limits"].get("action")
-        if allowed_actions is not None and "action" in args and args["action"] not in allowed_actions:
-            return {"status": "blocked", "reason": "Requested action is not permitted."}
 
         if policy in {"ELEVATION_REQUIRED", "UNTRUSTED_RUNNER"}:
             if not self.authorization.can(actor_id, tool_name):
