@@ -103,6 +103,13 @@ def test_task_store_symlink_is_rejected(tmp_path):
     with open(target, "w", encoding="utf-8") as handle:
         json.dump([], handle)
     try:
+        if os.path.exists(manager.path):
+            os.unlink(manager.path)
+        for suffix in ("-wal", "-shm"):
+            try:
+                os.unlink(manager.path + suffix)
+            except FileNotFoundError:
+                pass
         os.symlink(target, manager.path)
     except (OSError, NotImplementedError):
         pytest.skip("Symlink creation is unavailable on this platform.")
@@ -115,6 +122,13 @@ def test_broken_task_store_symlink_fails_closed():
     manager = TaskManager()
     target = os.path.join(os.path.dirname(manager.path), "missing-task-target.json")
     try:
+        if os.path.exists(manager.path):
+            os.unlink(manager.path)
+        for suffix in ("-wal", "-shm"):
+            try:
+                os.unlink(manager.path + suffix)
+            except FileNotFoundError:
+                pass
         os.symlink(target, manager.path)
     except (OSError, NotImplementedError):
         pytest.skip("Symlink creation is unavailable on this platform.")

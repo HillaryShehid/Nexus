@@ -1,6 +1,8 @@
 import json
 from datetime import datetime, timezone
 
+from src.context_manager import SlidingContextManager
+
 
 class _EphemeralMemoryStore:
     def get(self, key):
@@ -14,10 +16,16 @@ class _EphemeralMemoryStore:
 
 
 class CognitiveMemory:
-    """Memory facade with an explicitly injected storage adapter."""
-    def __init__(self, tools=None, store=None):
+    """Memory facade with a replaceable storage adapter.
+
+    The full conversation log remains in storage; only the model-facing context
+    is windowed to fit a bounded request budget.
+    """
+
+    def __init__(self, tools=None, store=None, context_manager=None):
         self.tools = tools
         self.store = store if store is not None else _EphemeralMemoryStore()
+        self.context_manager = context_manager or SlidingContextManager()
 
     def read_context(self):
         raw = self.store.get("chat_context")
@@ -37,14 +45,7 @@ class CognitiveMemory:
                     continue
             if isinstance(item, dict):
                 normalized.append(item)
-
-        recent = normalized[-20:]
-        lines = []
-        for item in recent:
-            user = str(item.get("user", ""))[:8000]
-            assistant = str(item.get("assistant", ""))[:12000]
-            lines.append(f"User: {user}\nNexus: {assistant}")
-        return "\n\n".join(lines) if lines else "No persisted conversation context is loaded."
+        return self.context_manager.compile_history(normalized)
 
     def save_conversation(self, user_message, assistant_message):
         payload = {

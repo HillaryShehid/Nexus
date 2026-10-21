@@ -23,9 +23,16 @@ def test_memory_round_trip(real_tools):
     assert read["success"] is True
     assert read["result"] == "Nexus"
 
-def test_code_runner_success(real_tools):
-    result=real_tools.execute("code_tester",{"python_code":"print('hello')"})
-    assert result["success"] is True
+def test_code_runner_delegates_to_secure_sandbox(real_tools, mocker):
+    expected = {
+        "success": True,
+        "result": json.dumps({"status": "success", "returncode": 0, "stdout": "hello", "stderr": ""}),
+        "error": None,
+    }
+    sandbox = mocker.patch("src.security_sandbox.SecureCodeSandbox.execute_untrusted_code", return_value=expected)
+    result = real_tools.execute("code_tester", {"python_code": "print('hello')"})
+    assert result == expected
+    sandbox.assert_called_once_with("print('hello')")
 
 
 def test_web_search_uses_ddgs_auto_backend_and_returns_structured_results(real_tools, monkeypatch):

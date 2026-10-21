@@ -2,10 +2,18 @@ import json, os
 from src.registry import WORKSPACE_DIR
 from src.verification import VerificationSystem
 
-def test_code_tester_requires_structured_success(real_tools, mock_brain):
+def test_code_tester_requires_structured_success(real_tools, mock_brain, mocker):
     verifier = VerificationSystem(mock_brain, real_tools)
     task = {"tool":"code_tester","args":{"python_code":"print('Success')"},"description":"Run test"}
     assert verifier.verify_step_result(task, {"success":True,"result":"Success","error":None})["verified"] is False
+    mocker.patch(
+        "src.security_sandbox.SecureCodeSandbox.execute_untrusted_code",
+        return_value={
+            "success": True,
+            "result": json.dumps({"status": "success", "returncode": 0, "stdout": "Success\\n", "stderr": ""}),
+            "error": None,
+        },
+    )
     real = real_tools.execute("code_tester", {"python_code":"print('Success')"})
     assert real["success"] is True
     assert verifier.verify_step_result(task, real)["verified"] is True
