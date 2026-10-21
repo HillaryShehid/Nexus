@@ -70,6 +70,9 @@ class SecureCodeSandbox:
                 script_path = os.path.join(temp_dir, "payload.py")
                 with open(script_path, "w", encoding="utf-8", newline="") as handle:
                     handle.write(script_contents)
+                # The sandbox user is non-root; make only this disposable folder
+                # traversable while keeping the payload itself read-only.
+                os.chmod(temp_dir, 0o755)
                 os.chmod(script_path, 0o444)
 
                 container = client.containers.create(
