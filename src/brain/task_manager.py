@@ -64,7 +64,7 @@ class TaskManager:
             return
         with open(self.path, "rb") as handle:
             header = handle.read(16)
-        if header == b"SQLite format 3\\x00":
+        if header == b"SQLite format 3\x00":
             return
         if os.path.getsize(self.path) > self.MAX_STORE_BYTES:
             raise ValueError("Task store exceeds the configured size limit.")
