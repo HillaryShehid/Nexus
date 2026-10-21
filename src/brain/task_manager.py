@@ -39,7 +39,7 @@ class TaskManager:
         self.legacy_path = os.path.abspath(
             legacy_path or os.path.join(WORKSPACE_DIR, "nexus_tasks.json")
         ) if path is None else legacy_path
-        self.path = os.path.abspath(path or os.path.join(WORKSPACE_DIR, "nexus_state.db"))
+        self._path = os.path.abspath(path or os.path.join(WORKSPACE_DIR, "nexus_state.db"))
         os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
         self._initialize_database()
 
