@@ -8,15 +8,13 @@ import logging
 import math
 import operator
 import os
-import signal
 import socket
-import subprocess
-import sys
 import tempfile
 import threading
 from urllib.parse import urljoin, urlsplit
 
 from src.registry import SHARED_REGISTRY, WORKSPACE_DIR
+from src.security_sandbox import SecureCodeSandbox
 
 logger = logging.getLogger("nexus.tools")
 MAX_PAGE_BYTES = 1 * 1024 * 1024
@@ -325,15 +323,6 @@ class ToolSystem:
                 logger.exception("Memory persistence failure.")
                 return {"success": False, "result": "", "error": "Memory Error: Unable to persist memory."}
 
-    def _terminate_process(self, process):
-        if process.poll() is not None: return
-        try:
-            if os.name == "nt": subprocess.run(["taskkill", "/F", "/T", "/PID", str(process.pid)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
-            else: os.killpg(process.pid, signal.SIGKILL)
-        except Exception:
-            try: process.kill()
-            except OSError: pass
-
     def tool_email(self, action, mailbox="INBOX", limit=10, unread_only=False, to="", subject="", body=""):
         from src.email_service import EmailService
 
@@ -369,19 +358,5 @@ class ToolSystem:
         }
 
     def tool_code_tester(self, python_code):
-        with tempfile.TemporaryDirectory(prefix="nexus_runner_") as tmpdir:
-            code_path = os.path.join(tmpdir, "sandbox.py")
-            try:
-                with open(code_path, "w", encoding="utf-8") as handle: handle.write(python_code)
-                process = subprocess.Popen([sys.executable, "-I", code_path], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env={}, cwd=tmpdir, text=True, start_new_session=(os.name != "nt"), creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
-                try: stdout, stderr = process.communicate(timeout=3)
-                except subprocess.TimeoutExpired:
-                    self._terminate_process(process); process.communicate(timeout=1)
-                    return {"success": False, "result": "", "error": "Untrusted Runner Error: Execution exceeded 3 seconds."}
-                stdout, stderr = (stdout or "")[:MAX_RUNNER_OUTPUT], (stderr or "")[:MAX_RUNNER_OUTPUT]
-                payload = {"status": "success" if process.returncode == 0 else "failed", "returncode": process.returncode, "stdout": stdout, "stderr": stderr}
-                if process.returncode == 0: return {"success": True, "result": json.dumps(payload), "error": None}
-                return {"success": False, "result": json.dumps(payload), "error": "Untrusted Runner Error: Test process returned a failure code."}
-            except (OSError, subprocess.SubprocessError):
-                logger.exception("Untrusted runner failure.")
-                return {"success": False, "result": "", "error": "Untrusted Runner Error: Unable to execute test process."}
+        """Execute AI-generated tests only inside the isolated Docker sandbox."""
+        return SecureCodeSandbox(timeout_seconds=3).execute_untrusted_code(python_code)
