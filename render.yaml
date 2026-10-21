@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: nexus-api
+    runtime: python
+    plan: free
+    buildCommand: pip install ".[dev,sandbox]"
+    startCommand: uvicorn src.api:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: NEXUS_API_TOKEN
+        sync: false
+      - key: OMNIROUTE_BASE_URL
+        sync: false
+      - key: OMNIROUTE_API_KEY
+        sync: false
+      - key: NEXUS_MODEL_MODE
+        value: free
+      - key: NEXUS_OMNIROUTE_MODEL
+        value: auto
+      - key: NEXUS_MODEL_TIMEOUT_SECONDS
+        value: "25"
