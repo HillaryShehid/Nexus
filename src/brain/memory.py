@@ -1,7 +1,6 @@
 import json
 from datetime import datetime, timezone
 
-from src.brain.local_memory_store import LocalMemoryStore
 from src.context_manager import SlidingContextManager
 
 
@@ -25,7 +24,7 @@ class CognitiveMemory:
 
     def __init__(self, tools=None, store=None, context_manager=None):
         self.tools = tools
-        self.store = store if store is not None else LocalMemoryStore(tools)
+        self.store = store if store is not None else _EphemeralMemoryStore()
         self.context_manager = context_manager or SlidingContextManager()
 
     def read_context(self):
