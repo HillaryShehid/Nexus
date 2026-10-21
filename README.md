@@ -180,7 +180,8 @@ The task manager is bounded for reliability and storage safety. Those task-stora
 ## Run
 
 ```bash
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,sandbox]"
+docker pull python:3.11-slim
 python run.py
 ```
 
@@ -197,4 +198,6 @@ pytest -q
 - 🔐 Provider credentials remain server-side.
 - 🛡️ LiveKit session credentials are minted by the local Nexus server.
 - 🧠 Voice and email requests remain subject to NexusCore's existing authorization and safety controls.
-- ⚠️ `code_tester` is an untrusted process runner, not a perfect OS sandbox. Production deployments should eventually add a dedicated sandbox/container/VM boundary.
+- 🛡️ `code_tester` uses a Docker-isolated sandbox with network disabled and resource limits. If Docker or the image is unavailable, execution fails closed rather than running code on the host.
+- 💾 Task checkpoints are stored in SQLite WAL mode; existing `nexus_tasks.json` task records are imported once and preserved as a migration backup.
+- 🧠 Conversation history remains stored; only the model-facing context is bounded to an approximate token budget.
