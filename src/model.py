@@ -64,6 +64,15 @@ class AIBrain:
 
         # OmniRoute is the sole model gateway. Its OpenAI-compatible API
         # handles provider selection, free-tier routing, and fallback.
+        # Bound gateway waits so a hung network connection cannot stall a
+        # request indefinitely. OmniRoute owns provider fallback; Nexus does not
+        # silently switch to local inference.
+        try:
+            timeout_seconds = float(os.getenv("NEXUS_MODEL_TIMEOUT_SECONDS", "25"))
+        except (TypeError, ValueError):
+            timeout_seconds = 25.0
+        timeout_seconds = max(1.0, min(timeout_seconds, 120.0))
+
         self.clients = {
             "omniroute": OpenAI(
                 api_key=os.getenv("OMNIROUTE_API_KEY", "sk_omniroute"),
@@ -71,6 +80,8 @@ class AIBrain:
                     "OMNIROUTE_BASE_URL",
                     "http://127.0.0.1:20128/v1",
                 ),
+                timeout=timeout_seconds,
+                max_retries=0,
             )
         }
 
