@@ -20,6 +20,7 @@ class TaskManager:
     """Persistent task queue; full task history is stored independently of chat."""
 
     MAX_TASKS = 50
+    MAX_STORE_BYTES = 1_000_000
     MAX_METADATA_FIELDS = 16
     MAX_METADATA_VALUE_CHARS = 2_000
     MAX_METADATA_KEY_CHARS = 64
@@ -34,16 +35,56 @@ class TaskManager:
 
     def __init__(self, path: str | None = None, legacy_path: str | None = None):
         os.makedirs(WORKSPACE_DIR, exist_ok=True)
-        self.path = os.path.abspath(path or os.path.join(WORKSPACE_DIR, "nexus_state.db"))
+        self._lock = threading.RLock()
         self.legacy_path = os.path.abspath(
             legacy_path or os.path.join(WORKSPACE_DIR, "nexus_tasks.json")
         ) if path is None else legacy_path
+        self.path = os.path.abspath(path or os.path.join(WORKSPACE_DIR, "nexus_state.db"))
         os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
-        self._lock = threading.RLock()
         self._initialize_database()
+
+    @property
+    def path(self):
+        return self._path
+
+    @path.setter
+    def path(self, value):
+        self._path = os.path.abspath(value)
+        # Preserve the historical test/integration seam that redirects the
+        # manager to a temporary path after construction.
+        if hasattr(self, "_lock"):
+            self.legacy_path = None
+            os.makedirs(os.path.dirname(self._path) or ".", exist_ok=True)
+            self._initialize_database()
+
+    def _assert_database_file(self):
+        if os.path.lexists(self.path) and os.path.islink(self.path):
+            raise ValueError("Task store must be a regular, non-symlink file.")
+        if not os.path.exists(self.path) or os.path.getsize(self.path) == 0:
+            return
+        with open(self.path, "rb") as handle:
+            header = handle.read(16)
+        if header == b"SQLite format 3\\x00":
+            return
+        if os.path.getsize(self.path) > self.MAX_STORE_BYTES:
+            raise ValueError("Task store exceeds the configured size limit.")
+        try:
+            with open(self.path, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise ValueError("Task store is unreadable or contains invalid JSON.") from exc
+        if not isinstance(data, list) or len(data) > self.MAX_TASKS:
+            raise ValueError("Task store has an invalid collection shape.")
+        required = {"id", "goal", "priority", "status", "created_at", "updated_at"}
+        for record in data:
+            if not isinstance(record, dict) or not required.issubset(record):
+                raise ValueError("Task store contains a malformed task record.")
+            self._validate_record(record)
+        raise ValueError("Task store is a legacy JSON file; reopen Nexus to migrate it to SQLite.")
 
     @contextmanager
     def _connect(self):
+        self._assert_database_file()
         connection = sqlite3.connect(self.path, timeout=5.0)
         connection.row_factory = sqlite3.Row
         try:
