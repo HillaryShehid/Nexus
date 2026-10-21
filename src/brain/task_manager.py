@@ -9,6 +9,7 @@ import json
 import os
 import sqlite3
 import threading
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -41,12 +42,16 @@ class TaskManager:
         self._lock = threading.RLock()
         self._initialize_database()
 
+    @contextmanager
     def _connect(self):
         connection = sqlite3.connect(self.path, timeout=5.0)
         connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA busy_timeout=5000")
-        connection.execute("PRAGMA foreign_keys=ON")
-        return connection
+        try:
+            connection.execute("PRAGMA busy_timeout=5000")
+            connection.execute("PRAGMA foreign_keys=ON")
+            yield connection
+        finally:
+            connection.close()
 
     def _initialize_database(self):
         with self._connect() as conn:
