@@ -37,7 +37,7 @@ class TaskManager:
         self.legacy_path = os.path.abspath(
             legacy_path or os.path.join(WORKSPACE_DIR, "nexus_tasks.json")
         ) if path is None else legacy_path
-        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
         self._lock = threading.RLock()
         self._initialize_database()
 
