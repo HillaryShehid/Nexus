@@ -1,4 +1,4 @@
-"""Small, token-protected HTTP API for hosted Nexus.
+""""Small, token-protected HTTP API for hosted Nexus.
 
 This is a single-owner deployment bridge, not the final multi-user NexusCore
 platform. Do not expose model/provider credentials to a browser.
@@ -8,12 +8,17 @@ from __future__ import annotations
 import hmac
 import os
 from functools import lru_cache
+from threading import Lock
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from starlette.responses import JSONResponse
 
 from src.core import NexusCore
+
+MAX_CHAT_REQUEST_BYTES = 64 * 1024
+_core_request_lock = Lock()
 
 app = FastAPI(
     title="Nexus API",
@@ -22,6 +27,68 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
 )
+
+
+class ChatRequestBodyLimitMiddleware:
+    """Bound chat request bodies before FastAPI parses JSON or authenticates."""
+
+    def __init__(self, app, max_bytes: int = MAX_CHAT_REQUEST_BYTES):
+        self.app = app
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope.get("path") != "/v1/chat":
+            await self.app(scope, receive, send)
+            return
+
+        headers = dict(scope.get("headers", []))
+        raw_length = headers.get(b"content-length")
+        if raw_length is not None:
+            try:
+                if int(raw_length) > self.max_bytes:
+                    await JSONResponse(
+                        status_code=413,
+                        content={"detail": "Request body too large."},
+                    )(scope, receive, send)
+                    return
+            except ValueError:
+                await JSONResponse(
+                    status_code=400,
+                    content={"detail": "Invalid Content-Length header."},
+                )(scope, receive, send)
+                return
+
+        # Also count streamed/chunked requests that omit Content-Length.
+        body = bytearray()
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                return
+            if message["type"] != "http.request":
+                continue
+            body.extend(message.get("body", b""))
+            if len(body) > self.max_bytes:
+                await JSONResponse(
+                    status_code=413,
+                    content={"detail": "Request body too large."},
+                )(scope, receive, send)
+                return
+            if not message.get("more_body", False):
+                break
+
+        replayed = False
+
+        async def replay_receive():
+            nonlocal replayed
+            if not replayed:
+                replayed = True
+                return {"type": "http.request", "body": bytes(body), "more_body": False}
+            return await receive()
+
+        await self.app(scope, replay_receive, send)
+
+
+app.add_middleware(ChatRequestBodyLimitMiddleware)
 
 # Browser origins are opt-in. Set a comma-separated list when the frontend exists.
 _allowed_origins = [
@@ -92,4 +159,8 @@ def chat(payload: ChatRequest) -> ChatResponse:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Message cannot be blank.",
         )
-    return ChatResponse(response=_get_core().handle_request(payload.message))
+    # NexusCore and its learning/state stores are shared and not concurrency-safe.
+    with _core_request_lock:
+        response = _get_core().handle_request(payload.message)
+    return ChatResponse(response=response)
+"
