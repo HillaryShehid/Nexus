@@ -1,3 +1,4 @@
+import asyncio
 import os
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
@@ -70,6 +71,42 @@ def test_chat_rejects_oversized_body_before_json_parsing(monkeypatch):
     )
     assert response.status_code == 413
     assert response.json() == {"detail": "Request body too large."}
+
+
+def test_body_limit_rejects_chunked_stream_without_content_length():
+    messages = iter(
+        [
+            {"type": "http.request", "body": b"1234", "more_body": True},
+            {"type": "http.request", "body": b"56", "more_body": False},
+        ]
+    )
+    sent = []
+    app_called = False
+
+    async def receive():
+        return next(messages)
+
+    async def send(message):
+        sent.append(message)
+
+    async def fake_app(scope, receive, send):
+        nonlocal app_called
+        app_called = True
+
+    middleware = api.ChatRequestBodyLimitMiddleware(fake_app, max_bytes=5)
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "method": "POST",
+        "path": "/v1/chat",
+        "headers": [],
+    }
+
+    asyncio.run(middleware(scope, receive, send))
+
+    assert not app_called
+    assert sent[0]["type"] == "http.response.start"
+    assert sent[0]["status"] == 413
 
 
 def test_chat_serializes_access_to_shared_nexus_core(monkeypatch):
