@@ -1,4 +1,7 @@
 import os
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
+from time import sleep
 
 from fastapi.testclient import TestClient
 
@@ -56,3 +59,48 @@ def test_chat_rejects_oversized_message(monkeypatch):
         json={"message": "a" * 8001},
     )
     assert response.status_code == 422
+
+
+def test_chat_rejects_oversized_body_before_json_parsing(monkeypatch):
+    monkeypatch.setenv("NEXUS_API_TOKEN", "x" * 40)
+    response = client.post(
+        "/v1/chat",
+        headers={"Authorization": "Bearer " + "x" * 40},
+        content=b'{"message":"' + b"a" * api.MAX_CHAT_REQUEST_BYTES + b'"}',
+    )
+    assert response.status_code == 413
+    assert response.json() == {"detail": "Request body too large."}
+
+
+def test_chat_serializes_access_to_shared_nexus_core(monkeypatch):
+    monkeypatch.setenv("NEXUS_API_TOKEN", "test-token-" + "x" * 40)
+    state_lock = Lock()
+    active = 0
+    max_active = 0
+
+    class FakeCore:
+        def handle_request(self, message):
+            nonlocal active, max_active
+            with state_lock:
+                active += 1
+                max_active = max(max_active, active)
+            sleep(0.03)
+            with state_lock:
+                active -= 1
+            return f"received: {message}"
+
+    monkeypatch.setattr(api, "_get_core", lambda: FakeCore())
+    headers = {"Authorization": "Bearer " + os.environ["NEXUS_API_TOKEN"]}
+
+    def send_message(index):
+        response = client.post(
+            "/v1/chat", headers=headers, json={"message": f"message {index}"}
+        )
+        assert response.status_code == 200
+        return response.json()["response"]
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(send_message, range(4)))
+
+    assert results == [f"received: message {i}" for i in range(4)]
+    assert max_active == 1
